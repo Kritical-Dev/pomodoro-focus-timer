@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .pw-iconbtn {
+    @apply rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-700/70 hover:text-slate-100;
+  }
+  .pw-ctl {
+    @apply flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white;
+  }
+  .pw-stepbtn {
+    @apply flex h-7 w-7 items-center justify-center rounded-md bg-slate-700/70 text-slate-300 transition-colors hover:bg-slate-600 hover:text-white;
+  }
+  .pw-label {
+    @apply text-[11px] font-medium uppercase tracking-wider text-slate-400;
+  }
+}
+
+/* Slim scrollbars inside the widget (shadow-DOM scoped) */
+#pw-tasks::-webkit-scrollbar {
+  width: 6px;
+}
+#pw-tasks::-webkit-scrollbar-thumb {
+  background: rgb(71 85 105 / 0.7);
+  border-radius: 9999px;
+}
+#pw-tasks::-webkit-scrollbar-track {
+  background: transparent;
+}
