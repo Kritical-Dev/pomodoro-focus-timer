@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         Pomodoro Focus Timer
 // @namespace    github.com/Kritical-Dev/pomodoro-focus-timer
-// @version      1.3.0
+// @version      1.3.1
 // @description  A modern, customizable Pomodoro timer with per-task and daily focus tracking. Draggable widget, tab-title countdown, cross-tab single instance.
 // @author       KriticalDev
 // @homepageURL  https://github.com/Kritical-Dev/pomodoro-focus-timer
 // @supportURL   https://github.com/Kritical-Dev/pomodoro-focus-timer/issues
+// @updateURL    https://raw.githubusercontent.com/Kritical-Dev/pomodoro-focus-timer/main/pomodoro.user.js
+// @downloadURL  https://raw.githubusercontent.com/Kritical-Dev/pomodoro-focus-timer/main/pomodoro.user.js
 // @icon         data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='20' r='10' fill='%23f43f5e'/><path d='M16 8c1-3 4-4 7-3.5-.5 2-2 3.5-4 4 2.5 1 4 3 4 5.5-2.5 0-4.5-1-5.5-3-.5 2-2 3.5-4 4 0-2.5.5-5 2.5-7z' fill='%2322c55e'/></svg>
 // @match        *://*/*
 // @noframes

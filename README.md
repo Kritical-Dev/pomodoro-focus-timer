@@ -5,12 +5,12 @@ A modern, fully self-contained Pomodoro userscript that floats on every website 
 ## Install
 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) (Chrome / Edge / Firefox / Safari).
-2. Open `pomodoro.user.js` in your browser (drag the file into a tab, or Tampermonkey → *Utilities → Import from file*).
-3. Tampermonkey will offer to install it — confirm. The widget appears in the bottom-right of every page.
+2. **[Install the script](https://raw.githubusercontent.com/Kritical-Dev/pomodoro-focus-timer/main/pomodoro.user.js)** — Tampermonkey intercepts the raw file and offers to install it. Installed this way it also checks for updates automatically (daily by default), because the script declares `@updateURL`/`@downloadURL`.
+3. The widget appears in the bottom-right of every page.
 
-> This repository is private, so `@updateURL`/`@downloadURL` auto-updates are not
-> configured (raw URLs require auth). To update, rebuild and re-import the file.
-> Re-importing replaces the script and keeps your stored stats.
+Alternatively, import `pomodoro.user.js` by hand (drag the file into a tab, or
+Tampermonkey → *Utilities → Import from file*). Be aware that manual installs
+do not auto-update.
 
 ## Features
 
@@ -26,6 +26,8 @@ A modern, fully self-contained Pomodoro userscript that floats on every website 
 - **Survives reloads** — a running timer fast-forwards through any phases that expired while the page was closed.
 - **Single active instance** — the timer runs only in your most recently focused tab; the widget (and drawer tab) follows you across tabs. Handoff is seamless because all countdown math is timestamp-based: the newly active tab reconstructs the exact remaining time from `endsAt` instead of keeping a live count.
 - **Performance-friendly** — see [Performance model](#performance-model) below: non-leader tabs do essentially nothing, and the leader wakes once per second only while a visible timer is running.
+- **Private** — see [Privacy](#privacy): no network requests, no telemetry; all data stays in local Tampermonkey storage.
+- **Auto-updating** — installed from the raw URL, Tampermonkey picks up new versions on its own.
 - **Fast setup changes** — duration and round fields are typable *and* steppable (no clicking `+` sixty times), with a one-click "reset settings to defaults".
 - **Panel shortcuts** — `Escape` leaves the stats/settings panel, `Enter` commits the task field, and the drawer tab `▲`/`▼` reflects whether the widget is open.
 - **Accessible** — labelled controls, a polite `role="status"` announcement for phase changes, visible keyboard focus rings, and `prefers-reduced-motion` support.
@@ -45,6 +47,18 @@ A modern, fully self-contained Pomodoro userscript that floats on every website 
 
 `Alt+Shift+T` was chosen because `Alt+Shift+P` (and `Ctrl+Shift+P`) open a
 private window in some browsers.
+
+## Privacy
+
+The script makes **no network requests**: no `fetch`, `XMLHttpRequest`,
+`WebSocket` or beacon calls, no analytics, and no external assets — the icon is
+an inline data URI and the entire stylesheet is compiled into the file. (The
+absence of these APIs is asserted by the test suite.)
+
+Everything it records — settings, the current task, per-task focus time and
+daily statistics — lives in Tampermonkey's local storage on your machine. The
+only network activity in the project is GitHub's own update check, which
+Tampermonkey performs, not the script.
 
 ## Performance model
 
@@ -106,7 +120,7 @@ npm test        # smoke-test the built script in jsdom
 
 ### Tests
 
-The suite (`test/smoke.test.mjs`, 68 checks) boots real DOM windows in jsdom with a shared Tampermonkey-like store (including cross-window change dispatch) and a fake clock, so it covers timer math, phase transitions, stats crediting, tab-title handling, the drawer tab, settings editing and clamping, cross-tab leadership, and the lazy-build/idle-tab behaviour — without waiting for real minutes to pass.
+The suite (`test/smoke.test.mjs`, 70 checks) boots real DOM windows in jsdom with a shared Tampermonkey-like store (including cross-window change dispatch) and a fake clock, so it covers timer math, phase transitions, stats crediting, tab-title handling, the drawer tab, settings editing and clamping, cross-tab leadership, the lazy-build/idle-tab behaviour, and the privacy/update-metadata claims — without waiting for real minutes to pass.
 
 Because a runaway mutation/render loop starves the event loop (timers never fire), such a failure can't be timed out from inside the same thread; `test/run.mjs` therefore runs the suite in a child process with a watchdog, so a freeze reports as a failure instead of hanging.
 

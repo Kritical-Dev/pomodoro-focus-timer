@@ -240,6 +240,18 @@ const main = async () => {
   check('iframes are excluded at metadata level', SCRIPT.includes('// @noframes'));
   check('reduced-motion is honoured in CSS', SCRIPT.includes('prefers-reduced-motion'));
   check('number fields hide their spinners', SCRIPT.includes('.pw-num::-webkit-inner-spin-button'));
+
+  // Privacy claim: the README says the script makes no network requests, so the
+  // absence of every network-capable API is asserted rather than assumed.
+  check(
+    'no network-capable APIs are used',
+    !/\bfetch\s*\(|XMLHttpRequest|sendBeacon|new WebSocket|EventSource|importScripts/.test(SCRIPT),
+    (SCRIPT.match(/\bfetch\s*\(|XMLHttpRequest|sendBeacon|new WebSocket|EventSource|importScripts/g) || []).join(', ')
+  );
+
+  const updateUrls = [...SCRIPT.matchAll(/\/\/ @(?:update|download)URL\s+(\S+)/g)].map(m => m[1]);
+  const RAW_URL = 'https://raw.githubusercontent.com/Kritical-Dev/pomodoro-focus-timer/main/pomodoro.user.js';
+  check('update/download URLs point at the published raw file', updateUrls.length === 2 && updateUrls.every(u => u === RAW_URL), updateUrls.join(' '));
   check('no store reads at load time', !/^\s*let settings = Object\.assign\({}, DEFAULT_SETTINGS, store\.get/m.test(SCRIPT));
 
   // Clean up jsdom timers so the process can exit.
