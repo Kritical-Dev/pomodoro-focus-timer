@@ -1,10 +1,14 @@
 // ==UserScript==
 // @name         Pomodoro Focus Timer
-// @namespace    local.pomodoro.timer
-// @version      1.2.0
-// @description  A modern, customizable Pomodoro timer with task & daily time tracking. Draggable floating widget on every page.
-// @author       you
+// @namespace    github.com/Kritical-Dev/pomodoro-focus-timer
+// @version      1.3.0
+// @description  A modern, customizable Pomodoro timer with per-task and daily focus tracking. Draggable widget, tab-title countdown, cross-tab single instance.
+// @author       KriticalDev
+// @homepageURL  https://github.com/Kritical-Dev/pomodoro-focus-timer
+// @supportURL   https://github.com/Kritical-Dev/pomodoro-focus-timer/issues
+// @icon         data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='20' r='10' fill='%23f43f5e'/><path d='M16 8c1-3 4-4 7-3.5-.5 2-2 3.5-4 4 2.5 1 4 3 4 5.5-2.5 0-4.5-1-5.5-3-.5 2-2 3.5-4 4 0-2.5.5-5 2.5-7z' fill='%2322c55e'/></svg>
 // @match        *://*/*
+// @noframes
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_notification
@@ -70,9 +74,9 @@
   };
 
   const SETTING_ROWS = [
-    ['focusMin', 'Focus duration'],
-    ['shortMin', 'Short break'],
-    ['longMin', 'Long break'],
+    ['focusMin', 'Focus duration (min)'],
+    ['shortMin', 'Short break (min)'],
+    ['longMin', 'Long break (min)'],
     ['rounds', 'Rounds per cycle'],
   ];
 
@@ -411,14 +415,18 @@
     chevDown: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>',
   };
 
+  // A typable number field flanked by +/- steppers. The field is the single
+  // source of truth so clicking and typing can't drift apart.
   function stepperRow(key, label) {
+    const name = label.replace(' (min)', '').toLowerCase();
     return (
-      '<div class="flex items-center justify-between">' +
+      '<div class="flex items-center justify-between gap-2">' +
         '<span class="text-[13px] text-slate-300">' + label + '</span>' +
         '<div class="flex items-center gap-1.5">' +
-          '<button class="pw-stepbtn" data-step="' + key + ':-1" title="Decrease">' + ICONS.sub + '</button>' +
-          '<span id="pw-set-' + key + '" class="w-14 text-center text-[13px] font-semibold tabular-nums text-slate-100"></span>' +
-          '<button class="pw-stepbtn" data-step="' + key + ':1" title="Increase">' + ICONS.plus + '</button>' +
+          '<button class="pw-stepbtn" data-step="' + key + ':-1" title="Decrease" aria-label="Decrease ' + name + '">' + ICONS.sub + '</button>' +
+          '<input id="pw-set-' + key + '" type="number" inputmode="numeric" min="' + RANGES[key][0] + '" max="' + RANGES[key][1] + '" aria-label="' + name + '" ' +
+            'class="pw-num w-11 select-text rounded-md border border-slate-700/70 bg-slate-800/70 py-0.5 text-center text-[13px] font-semibold tabular-nums text-slate-100 outline-none focus:border-rose-500/60"/>' +
+          '<button class="pw-stepbtn" data-step="' + key + ':1" title="Increase" aria-label="Increase ' + name + '">' + ICONS.plus + '</button>' +
         '</div>' +
       '</div>'
     );
@@ -442,9 +450,10 @@
         '<div id="pw-header" class="flex cursor-move items-center gap-1 border-b border-slate-800 px-3 py-2">' +
           '<span class="text-base leading-none">🍅</span>' +
           '<span class="flex-1 text-[13px] font-semibold tracking-wide text-slate-300">Pomodoro</span>' +
-          '<button data-act="stats" title="Stats" class="pw-iconbtn">' + ICONS.chart + '</button>' +
-          '<button data-act="settings" title="Settings" class="pw-iconbtn">' + ICONS.gear + '</button>' +
-          '<button data-act="min" title="Minimize" class="pw-iconbtn">' + ICONS.minus + '</button>' +
+          '<button data-act="stats" title="Stats" aria-label="Stats" class="pw-iconbtn">' + ICONS.chart + '</button>' +
+          '<button data-act="settings" title="Settings" aria-label="Settings" class="pw-iconbtn">' + ICONS.gear + '</button>' +
+          '<button data-act="min" title="Minimize to pill" aria-label="Minimize to pill" class="pw-iconbtn">' + ICONS.minus + '</button>' +
+          '<button data-act="hide" title="Hide (reopen from the drawer tab, bottom-left)" aria-label="Hide widget" class="pw-iconbtn">' + ICONS.chevDown + '</button>' +
         '</div>' +
 
         // Timer view
@@ -454,21 +463,21 @@
             '<span id="pw-rounds" class="text-[11px] font-medium text-slate-400">Round 1/4</span>' +
           '</div>' +
           '<div class="relative mx-auto my-3 h-44 w-44">' +
-            '<svg viewBox="0 0 120 120" class="h-44 w-44 -rotate-90">' +
+            '<svg viewBox="0 0 120 120" class="h-44 w-44 -rotate-90" aria-hidden="true">' +
               '<circle cx="60" cy="60" r="54" fill="none" stroke-width="8" class="stroke-slate-700/50"/>' +
               '<circle id="pw-ring" cx="60" cy="60" r="54" fill="none" stroke-width="8" stroke-linecap="round" class="stroke-rose-500" stroke-dasharray="' + RING_LEN.toFixed(3) + '" stroke-dashoffset="0"/>' +
             '</svg>' +
             '<div class="absolute inset-0 flex flex-col items-center justify-center">' +
-              '<div id="pw-time" class="text-3xl font-bold tabular-nums tracking-tight text-slate-50">25:00</div>' +
-              '<div id="pw-state" class="mt-0.5 text-[11px] font-medium text-slate-400">Ready</div>' +
+              '<div id="pw-time" role="timer" class="text-3xl font-bold tabular-nums tracking-tight text-slate-50">25:00</div>' +
+              '<div id="pw-state" role="status" aria-live="polite" class="mt-0.5 text-[11px] font-medium text-slate-400">Ready</div>' +
             '</div>' +
           '</div>' +
-          '<input id="pw-task" type="text" placeholder="What are you working on?" maxlength="80" ' +
+          '<input id="pw-task" type="text" placeholder="What are you working on?" maxlength="80" aria-label="Current task" ' +
             'class="mb-3 w-full select-text rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-1.5 text-[13px] text-slate-100 placeholder-slate-500 outline-none focus:border-rose-500/60"/>' +
           '<div class="flex items-center justify-center gap-3">' +
-            '<button data-act="reset" title="Reset to round 1" class="pw-ctl">' + ICONS.reset + '</button>' +
-            '<button data-act="toggle" id="pw-play" title="Start / Pause" class="flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-105 bg-rose-500 hover:bg-rose-400 shadow-rose-500/30">' + ICONS.play + '</button>' +
-            '<button data-act="skip" title="Skip to next phase" class="pw-ctl">' + ICONS.skip + '</button>' +
+            '<button data-act="reset" title="Reset to round 1" aria-label="Reset to round 1" class="pw-ctl">' + ICONS.reset + '</button>' +
+            '<button data-act="toggle" id="pw-play" title="Start / Pause" aria-label="Start or pause" class="flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-105 bg-rose-500 hover:bg-rose-400 shadow-rose-500/30">' + ICONS.play + '</button>' +
+            '<button data-act="skip" title="Skip to next phase" aria-label="Skip to next phase" class="pw-ctl">' + ICONS.skip + '</button>' +
           '</div>' +
           '<div id="pw-today" class="mt-3 border-t border-slate-800 pt-2 text-center text-[11px] text-slate-400">Today: 0m focused · 0 rounds</div>' +
         '</div>' +
@@ -485,7 +494,9 @@
           '<div class="mt-3 space-y-2 border-t border-slate-800 pt-3">' +
             TOGGLES.map(t => toggleRow(t[0], t[1])).join('') +
           '</div>' +
-          '<p class="mt-3 text-[11px] leading-relaxed text-slate-500">Changes apply immediately. A running phase keeps its current duration; new durations apply to the next phase.</p>' +
+          '<button id="pw-reset-settings" title="Restore the default 25/5/15 x 4 configuration" ' +
+            'class="mt-3 w-full rounded-lg border border-slate-700/70 py-1.5 text-[12px] font-medium text-slate-400 transition-colors hover:bg-slate-800/70 hover:text-slate-100">Reset settings to defaults</button>' +
+          '<p class="mt-2 text-[11px] leading-relaxed text-slate-500">Changes apply immediately. A running phase keeps its current duration; new durations apply to the next phase.</p>' +
         '</div>' +
 
         // Stats view
@@ -507,6 +518,7 @@
           '</div>' +
           '<div class="pw-label mt-3">Last 7 days</div>' +
           '<div id="pw-chart" class="mt-1 flex h-24 items-end gap-1.5 rounded-xl bg-slate-800/70 p-2"></div>' +
+          '<div id="pw-week-total" class="mt-1.5 text-center text-[11px] text-slate-400">This week: 0m</div>' +
           '<div class="pw-label mt-3">Tasks today</div>' +
           '<div id="pw-tasks" class="mt-1 max-h-32 space-y-1 overflow-y-auto pr-0.5"></div>' +
         '</div>' +
@@ -575,12 +587,19 @@
       pillDot: $('#pw-pill-dot'), pillTime: $('#pw-pill-time'),
       viewTimer: $('#pw-view-timer'), viewSettings: $('#pw-view-settings'), viewStats: $('#pw-view-stats'),
       statFocus: $('#pw-stat-focus'), statRounds: $('#pw-stat-rounds'),
-      chart: $('#pw-chart'), tasks: $('#pw-tasks'),
+      chart: $('#pw-chart'), tasks: $('#pw-tasks'), weekTotal: $('#pw-week-total'),
       tab: $('#pw-tab'), tabIcon: $('#pw-tab-icon'),
     };
     el.task.value = S.task || '';
     watchSiteTitle();
     bindEvents();
+    (document.body || document.documentElement).appendChild(host);
+  }
+
+  // A few SPAs replace document.body wholesale, which would take the widget
+  // with it. Re-attaching is a cheap isConnected check on each render.
+  function ensureMounted() {
+    if (!built || host.isConnected) return;
     (document.body || document.documentElement).appendChild(host);
   }
 
@@ -601,6 +620,7 @@
 
   function render() {
     if (!isLeader || !built) return;
+    ensureMounted();
 
     const surface = ui.hidden ? 'none' : ui.mode; // 'card' | 'pill' | 'none'
     const timeStr = fmtClock(S.remaining);
@@ -684,7 +704,8 @@
     if (!settings.titleTimer) { restoreTitle(); return; }
     const p = PHASES[S.phase];
     const task = (S.task || '').trim();
-    const t = p.icon + ' ' + timeStr + ' ' + p.label + (task ? ' · ' + task : '') + (origTitle ? ' — ' + origTitle : '');
+    const shown = task.length > 40 ? task.slice(0, 39) + '…' : task; // keep the tab title readable
+    const t = p.icon + ' ' + timeStr + ' ' + p.label + (shown ? ' · ' + shown : '') + (origTitle ? ' — ' + origTitle : '');
     if (document.title !== t) { writtenTitle = t; document.title = t; }
   }
 
@@ -711,13 +732,34 @@
   function syncSettingsView() {
     if (!el) return;
     for (const [key] of SETTING_ROWS) {
-      const span = $('#pw-set-' + key);
-      if (span) span.textContent = settings[key] + (key === 'rounds' ? '' : ' min');
+      const input = $('#pw-set-' + key);
+      // Never clobber what the user is currently typing into.
+      if (input && input !== shadow.activeElement) input.value = settings[key];
     }
     for (const [key] of TOGGLES) {
       const t = $('#pw-tgl-' + key);
       if (t) t.checked = !!settings[key];
     }
+  }
+
+  // Single funnel for every settings change — typed fields, +/- steppers and
+  // the toggle switches all land here, so behaviour can't diverge.
+  function applySetting(key, value) {
+    settings[key] = value;
+    // Rounds can shrink below the round already in flight; keep the readout
+    // coherent ("Round 1/1", never "Round 5/3").
+    if (key === 'rounds' && S.round > value) S.round = value;
+    saveSettings();
+    syncSettingsView();
+    // A phase that hasn't started yet adopts a new duration straight away.
+    if (key !== 'rounds' && !S.running && S.remaining === S.duration) {
+      S.duration = durationFor(S.phase);
+      S.remaining = S.duration;
+      saveState();
+    }
+    render();
+    if (key === 'titleTimer') renderTitle(fmtClock(S.remaining));
+    if (key === 'sound' && value) chime('focusDone'); // audible preview
   }
 
   /* ---- Stats view ---- */
@@ -743,6 +785,8 @@
         '<div class="text-[9px] ' + (isToday ? 'font-bold text-slate-300' : 'text-slate-500') + '">' + x.label + '</div>' +
       '</div>';
     }).join('');
+
+    el.weekTotal.textContent = 'This week: ' + fmtHuman(days.reduce((a, x) => a + x.val, 0));
 
     // Tasks today
     const entries = Object.entries(d.tasks || {}).sort((a, b) => b[1] - a[1]);
@@ -930,16 +974,7 @@
       if (stepBtn) {
         const [key, delta] = stepBtn.getAttribute('data-step').split(':');
         const [lo, hi] = RANGES[key];
-        settings[key] = clamp(settings[key] + Number(delta), lo, hi);
-        saveSettings();
-        syncSettingsView();
-        // If the current phase hasn't started yet, adopt the new duration.
-        if (!S.running && S.remaining === S.duration) {
-          S.duration = durationFor(S.phase);
-          S.remaining = S.duration;
-          saveState();
-        }
-        render();
+        applySetting(key, clamp(settings[key] + Number(delta), lo, hi));
         return;
       }
 
@@ -950,6 +985,7 @@
         case 'reset': reset(); break;
         case 'skip': skip(); break;
         case 'min': setMode('pill'); break;
+        case 'hide': setHidden(true); break;
         case 'settings': showView('settings'); break;
         case 'stats': showView('stats'); break;
         case 'back': showView('timer'); break;
@@ -975,12 +1011,50 @@
     // Toggle switches
     for (const [key] of TOGGLES) {
       const t = $('#pw-tgl-' + key);
-      t.addEventListener('change', () => {
-        settings[key] = t.checked;
-        saveSettings();
-        if (key === 'titleTimer') renderTitle(fmtClock(S.remaining));
+      t.addEventListener('change', () => applySetting(key, t.checked));
+    }
+
+    // Duration fields — typing commits on Enter or blur.
+    for (const [key] of SETTING_ROWS) {
+      const input = $('#pw-set-' + key);
+      const commit = () => {
+        const [lo, hi] = RANGES[key];
+        const typed = Math.round(Number(input.value));
+        const v = clamp(Number.isFinite(typed) && typed > 0 ? typed : settings[key], lo, hi);
+        input.value = v; // show the clamped value back to the user
+        if (v !== settings[key]) applySetting(key, v);
+      };
+      input.addEventListener('change', commit);
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        else if (e.key === 'Escape') input.blur();
       });
     }
+
+    // Reset every setting back to the shipped defaults.
+    $('#pw-reset-settings').addEventListener('click', () => {
+      Object.assign(settings, DEFAULT_SETTINGS);
+      if (S.round > settings.rounds) S.round = settings.rounds;
+      saveSettings();
+      syncSettingsView();
+      if (!S.running && S.remaining === S.duration) {
+        S.duration = durationFor(S.phase);
+        S.remaining = S.duration;
+        saveState();
+      }
+      render();
+      renderTitle(fmtClock(S.remaining));
+    });
+
+    // Enter in the task field commits it (blur then fires `change`).
+    el.task.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); el.task.blur(); }
+    });
+
+    // Escape backs out of a panel.
+    shadow.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && el.viewTimer.classList.contains('hidden')) showView('timer');
+    });
 
     // Pill click → expand (ignored right after a drag)
     el.pill.addEventListener('click', () => {
@@ -1041,13 +1115,36 @@
     }
   });
 
+  // Open a panel from the Tampermonkey menu — this tab takes over and un-hides.
+  function openPanel(view) {
+    claimLeadership();
+    setHidden(false);
+    setMode('card');
+    showView(view);
+  }
+
   if (typeof GM_registerMenuCommand !== 'undefined') {
     try {
       GM_registerMenuCommand('▶ / ⏸  Start / Pause', () => { ensureLeader(); toggle(); });
       GM_registerMenuCommand('👁  Show / Hide widget  (Alt+Shift+T)', () => { claimLeadership(); toggleHidden(); });
       GM_registerMenuCommand('⏭  Skip phase', () => { ensureLeader(); skip(); });
+      GM_registerMenuCommand('📊  Open stats', () => openPanel('stats'));
+      GM_registerMenuCommand('⚙  Open settings', () => openPanel('settings'));
     } catch (e) { /* older managers */ }
   }
+
+  // Keep a dragged widget reachable when the window shrinks.
+  window.addEventListener('resize', () => {
+    if (!built || !ui.pos) return;
+    const r = host.getBoundingClientRect();
+    const left = clamp(ui.pos.left, 4, Math.max(4, window.innerWidth - r.width - 4));
+    const top = clamp(ui.pos.top, 4, Math.max(4, window.innerHeight - r.height - 4));
+    if (left === ui.pos.left && top === ui.pos.top) return;
+    ui.pos = { left, top };
+    saveUi();
+    host.style.setProperty('left', left + 'px', 'important');
+    host.style.setProperty('top', top + 'px', 'important');
+  });
 
   window.addEventListener('beforeunload', () => { if (isLeader) { flushFocus(); saveState(); } });
 

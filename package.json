@@ -1,8 +1,19 @@
 {
   "name": "pomodoro",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "description": "A modern, fully self-contained Pomodoro userscript that floats on every website and tracks how long you spend on tasks each day. UI is built with Tailwind CSS, compiled and inlined into the script, and rendered inside a Shadow DOM so page styles never leak in or out.",
   "main": "pomodoro.user.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kritical-Dev/pomodoro-focus-timer.git"
+  },
+  "homepage": "https://github.com/Kritical-Dev/pomodoro-focus-timer",
+  "bugs": {
+    "url": "https://github.com/Kritical-Dev/pomodoro-focus-timer/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "node build.mjs",
     "test": "node test/run.mjs"

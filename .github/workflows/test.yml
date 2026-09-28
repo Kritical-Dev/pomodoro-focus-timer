@@ -1,0 +1,30 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # The suite's own watchdog catches a frozen main thread; this bounds the
+    # whole job in case something hangs before the watchdog is reached.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Rebuild and verify the committed userscript is up to date
+        run: |
+          npm run build
+          git diff --exit-code -- pomodoro.user.js
+
+      - name: Smoke tests
+        run: npm test

@@ -172,11 +172,74 @@ const main = async () => {
   check('tab click shows the widget again', !A.$('#pw-card').classList.contains('hidden'));
   check('tab arrow flips to down when shown', A.$('#pw-tab-icon').innerHTML.includes('M7.41 8.59'));
 
+  section('Settings & quality-of-life');
+  const setNum = (key, v) => {
+    const input = A.$('#pw-set-' + key);
+    input.value = String(v);
+    input.dispatchEvent(new A.w.Event('change', { bubbles: true }));
+  };
+  const settingsNow = () => JSON.parse(store.get('pomodoro.settings'));
+
+  A.$('[data-act="reset"]').click();
+  check('reset returns to a ready focus round', A.$('#pw-state').textContent === 'Ready', A.$('#pw-state').textContent);
+  check('duration fields carry their bounds', A.$('#pw-set-focusMin').min === '1' && A.$('#pw-set-focusMin').max === '180');
+
+  setNum('focusMin', 50);
+  check('typing a duration is committed', settingsNow().focusMin === 50, JSON.stringify(settingsNow()));
+  check('a fresh phase adopts the typed duration', A.$('#pw-time').textContent === '50:00', A.$('#pw-time').textContent);
+
+  setNum('focusMin', 9999);
+  check('out-of-range input is clamped', A.$('#pw-set-focusMin').value === '180', A.$('#pw-set-focusMin').value);
+  A.$('[data-step="focusMin:-1"]').click();
+  check('the steppers agree with the field', A.$('#pw-set-focusMin').value === '179', A.$('#pw-set-focusMin').value);
+
+  // Drive a whole cycle with 1-minute phases so the round counter moves.
+  setNum('focusMin', 1);
+  setNum('shortMin', 1);
+  A.$('#pw-play').click();
+  fakeNow += 60000;
+  await until(() => A.$('#pw-phase').textContent === 'Short Break');
+  fakeNow += 60000;
+  await until(() => A.$('#pw-rounds').textContent === 'Round 2/4');
+  check('the round advances once a break finishes', A.$('#pw-rounds').textContent === 'Round 2/4', A.$('#pw-rounds').textContent);
+  setNum('rounds', 1);
+  check('shrinking rounds clamps the round in flight', A.$('#pw-rounds').textContent === 'Round 1/1', A.$('#pw-rounds').textContent);
+
+  A.$('#pw-reset-settings').click();
+  const defaults = JSON.parse(store.get('pomodoro.settings'));
+  check('reset-settings restores every default', defaults.focusMin === 25 && defaults.shortMin === 5 && defaults.longMin === 15 && defaults.rounds === 4, JSON.stringify(defaults));
+  check('reset-settings refreshes the fields', A.$('#pw-set-focusMin').value === '25', A.$('#pw-set-focusMin').value);
+  check('reset-settings re-adopts the duration', A.$('#pw-time').textContent === '25:00', A.$('#pw-time').textContent);
+
+  A.$('[data-act="hide"]').click();
+  check('the hide button hides the widget', A.$('#pw-card').classList.contains('hidden'));
+  check('the drawer tab stays available while hidden', !A.$('#pw-tab').classList.contains('hidden'));
+  check('the drawer arrow points up while hidden', A.$('#pw-tab-icon').innerHTML.includes('M7.41 15.41'));
+  A.$('#pw-tab').click();
+  check('the drawer tab brings the widget back', !A.$('#pw-card').classList.contains('hidden'));
+
+  A.$('[data-act="settings"]').click();
+  check('the settings panel opens', !A.$('#pw-view-settings').classList.contains('hidden'));
+  A.shadow.dispatchEvent(new A.w.KeyboardEvent('keydown', { key: 'Escape' }));
+  check('Escape returns to the timer', !A.$('#pw-view-timer').classList.contains('hidden') && A.$('#pw-view-settings').classList.contains('hidden'));
+
+  A.$('[data-act="stats"]').click();
+  const weekTotal = A.$('#pw-week-total').textContent;
+  check('stats total the last 7 days', /^This week: /.test(weekTotal) && weekTotal !== 'This week: 0m', weekTotal);
+  check('stats show the focus credited today', A.$('#pw-stat-focus').textContent !== '0m', A.$('#pw-stat-focus').textContent);
+  check('stats list the tracked task', A.$('#pw-tasks').textContent.includes('Untracked'), A.$('#pw-tasks').textContent);
+  A.shadow.dispatchEvent(new A.w.KeyboardEvent('keydown', { key: 'Escape' }));
+
   section('Structural guards for the idle/timer model');
   check('no polling timers anywhere (setInterval)', !SCRIPT.includes('setInterval'));
   check('catch-up completions are silent', SCRIPT.includes('announce && !catchingUp'));
   check('catch-up chains are capped', SCRIPT.includes('rapidSteps < 20'));
   check('UI is built lazily, not at startup', SCRIPT.includes('function buildUI()'));
+  check('a hide action exists in the widget', SCRIPT.includes('data-act="hide"'));
+  check('metadata declares an icon', SCRIPT.includes('// @icon'));
+  check('iframes are excluded at metadata level', SCRIPT.includes('// @noframes'));
+  check('reduced-motion is honoured in CSS', SCRIPT.includes('prefers-reduced-motion'));
+  check('number fields hide their spinners', SCRIPT.includes('.pw-num::-webkit-inner-spin-button'));
   check('no store reads at load time', !/^\s*let settings = Object\.assign\({}, DEFAULT_SETTINGS, store\.get/m.test(SCRIPT));
 
   // Clean up jsdom timers so the process can exit.

@@ -15,6 +15,18 @@
   .pw-label {
     @apply text-[11px] font-medium uppercase tracking-wider text-slate-400;
   }
+  /* Number fields: spinners hidden, so the value reads like a label but stays
+     typable — clicking +/- sixty times to reach a long duration is no fun. */
+  .pw-num {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+}
+
+.pw-num::-webkit-outer-spin-button,
+.pw-num::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 /* Slim scrollbars inside the widget (shadow-DOM scoped) */
@@ -27,4 +39,24 @@
 }
 #pw-tasks::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Visible keyboard focus (mouse clicks stay ring-free) */
+#pw-wrap button:focus-visible,
+#pw-wrap input:focus-visible {
+  outline: 2px solid rgb(148 163 184 / 0.9);
+  outline-offset: 2px;
+}
+
+/* Honour the OS "reduce motion" preference */
+@media (prefers-reduced-motion: reduce) {
+  #pw-wrap *,
+  #pw-wrap *::before,
+  #pw-wrap *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+  #pw-wrap button:hover {
+    transform: none !important;
+  }
 }
