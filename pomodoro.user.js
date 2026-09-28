@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pomodoro Focus Timer
 // @namespace    github.com/Kritical-Dev/pomodoro-focus-timer
-// @version      1.3.1
+// @version      1.3.2
 // @description  A modern, customizable Pomodoro timer with per-task and daily focus tracking. Draggable widget, tab-title countdown, cross-tab single instance.
 // @author       KriticalDev
 // @homepageURL  https://github.com/Kritical-Dev/pomodoro-focus-timer
@@ -968,6 +968,22 @@
   let pillDragged = false;
 
   function bindEvents() {
+    // Keystrokes typed in the widget must not escape to the page.
+    //
+    // Shadow DOM retargets events to the host element, so a page's guard such
+    // as `if (e.target.tagName === 'INPUT') return` never matches a field
+    // inside our shadow root. The page then treats your typing as its own
+    // single-key shortcut and calls preventDefault(), which swallows the
+    // character — typically one specific letter, e.g. 'k' on Gmail (previous
+    // conversation), YouTube (play/pause) or GitHub. Stopping propagation at
+    // the shadow root keeps plain typing inside; genuine modifier combos
+    // (copy/paste, undo, our Alt+Shift+T hotkey) are left to propagate.
+    const shieldKeys = e => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      e.stopPropagation();
+    };
+    for (const type of ['keydown', 'keypress', 'keyup']) shadow.addEventListener(type, shieldKeys);
+
     shadow.addEventListener('click', e => {
       // Unlock audio on first interaction (autoplay policies).
       if (actx && actx.state === 'suspended') actx.resume();

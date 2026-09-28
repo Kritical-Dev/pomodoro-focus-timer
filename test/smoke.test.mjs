@@ -230,6 +230,34 @@ const main = async () => {
   check('stats list the tracked task', A.$('#pw-tasks').textContent.includes('Untracked'), A.$('#pw-tasks').textContent);
   A.shadow.dispatchEvent(new A.w.KeyboardEvent('keydown', { key: 'Escape' }));
 
+  section('Keystroke isolation (page shortcuts must not swallow typing)');
+  const seenByPage = [];
+  const pageHotkey = e => { seenByPage.push(e.key); if (e.key === 'k') e.preventDefault(); };
+  A.w.document.addEventListener('keydown', pageHotkey);
+  const keyEv = (key, extra = {}) => new A.w.KeyboardEvent('keydown', Object.assign({ key, code: 'KeyK', bubbles: true, composed: true }, extra));
+  const task5 = A.$('#pw-task');
+  task5.focus();
+
+  const plainKey = keyEv('k');
+  task5.dispatchEvent(plainKey);
+  check('a plain letter never reaches page-level shortcuts', seenByPage.length === 0, seenByPage.join(','));
+  check('we never preventDefault a plain letter ourselves', plainKey.defaultPrevented === false);
+
+  task5.dispatchEvent(keyEv('K', { shiftKey: true }));
+  check('shift+letter (capitals) stay inside too', seenByPage.length === 0, seenByPage.join(','));
+
+  task5.dispatchEvent(keyEv('k', { ctrlKey: true }));
+  check('modifier combos still reach the page (copy/paste, site shortcuts)', seenByPage.join(',') === 'k', seenByPage.join(','));
+
+  seenByPage.length = 0;
+  A.$('#pw-set-focusMin').dispatchEvent(keyEv('k'));
+  check('the settings fields are shielded as well', seenByPage.length === 0, seenByPage.join(','));
+  A.w.document.removeEventListener('keydown', pageHotkey);
+
+  A.$('[data-act="settings"]').click();
+  A.$('#pw-set-focusMin').dispatchEvent(new A.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true }));
+  check('the shield does not block our own key handling', !A.$('#pw-view-timer').classList.contains('hidden'));
+
   section('Structural guards for the idle/timer model');
   check('no polling timers anywhere (setInterval)', !SCRIPT.includes('setInterval'));
   check('catch-up completions are silent', SCRIPT.includes('announce && !catchingUp'));

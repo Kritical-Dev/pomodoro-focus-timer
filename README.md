@@ -120,7 +120,7 @@ npm test        # smoke-test the built script in jsdom
 
 ### Tests
 
-The suite (`test/smoke.test.mjs`, 70 checks) boots real DOM windows in jsdom with a shared Tampermonkey-like store (including cross-window change dispatch) and a fake clock, so it covers timer math, phase transitions, stats crediting, tab-title handling, the drawer tab, settings editing and clamping, cross-tab leadership, the lazy-build/idle-tab behaviour, and the privacy/update-metadata claims — without waiting for real minutes to pass.
+The suite (`test/smoke.test.mjs`, 76 checks) boots real DOM windows in jsdom with a shared Tampermonkey-like store (including cross-window change dispatch) and a fake clock, so it covers timer math, phase transitions, stats crediting, tab-title handling, the drawer tab, settings editing and clamping, cross-tab leadership, keystroke isolation from page shortcuts, the lazy-build/idle-tab behaviour, and the privacy/update-metadata claims — without waiting for real minutes to pass.
 
 Because a runaway mutation/render loop starves the event loop (timers never fire), such a failure can't be timed out from inside the same thread; `test/run.mjs` therefore runs the suite in a child process with a watchdog, so a freeze reports as a failure instead of hanging.
 
@@ -138,6 +138,7 @@ which is what makes that check reliable).
 ## Troubleshooting
 
 - **Pages hang / don't load, and the title bar shows the countdown repeated many times** — fixed in v1.1.0. The cause was a tab-title feedback loop: `MutationObserver` callbacks are microtasks, so a "currently writing the title" boolean was already cleared by the time the observer fired, and the script mistook its own title write for a site change and reappended it forever. The fix compares the live title against the exact string last written (`writtenTitle`). Regression-tested in `test/smoke.test.mjs`.
+- **A particular letter won't type in the task box** — fixed in v1.3.2. Shadow DOM retargets keyboard events to the host element, so a page's "ignore shortcuts while typing" guard (`e.target.tagName === 'INPUT'`) never matched a field inside the widget. The site therefore treated your typing as its own single-key shortcut and called `preventDefault()`, swallowing that character — `k` is "previous conversation" in Gmail, "play/pause" in YouTube, and a GitHub shortcut, so it was the usual culprit. Plain keystrokes are now stopped at the shadow root, while modifier combos (copy/paste, `Alt+Shift+T`) still propagate. Regression-tested.
 - **Widget or drawer tab missing in a tab** — expected unless that tab is the elected leader; switch to (or click) the tab and it claims the widget automatically. See the notes below.
 
 ## Notes / limitations
@@ -147,3 +148,4 @@ which is what makes that check reliable).
 - If the browser is fully minimized for a long time, Chrome's intensive throttling may delay a completion chime by up to ~1 minute — the clock itself never drifts, since it's computed from timestamps. (This is inherent to userscripts; only a full extension with the `alarms` API can do better.)
 - Sites with a very strict Content-Security-Policy (no `unsafe-inline` in `style-src`) may block the widget's styles — rare, but possible.
 - Excluded from iframes via `@noframes` (and a top-frame check as a second guard).
+- Typing in the widget is isolated from page shortcuts (see troubleshooting above). A site that binds its hotkeys in the **capture** phase on `document` still runs before the event reaches us — that is inherent to Shadow DOM, and it is why a site can still claim a key while you type in the widget. Every bubbling-phase listener is isolated.
