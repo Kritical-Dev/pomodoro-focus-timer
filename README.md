@@ -93,6 +93,8 @@ otherwise be emitted from bare identifiers in the script.
 
 ## Development
 
+Requires Node 22 or newer (the test dependency jsdom 30 needs it).
+
 The source template is `src/pomodoro.template.js` with a `__TAILWIND_CSS__` placeholder.
 
 ```sh
@@ -113,9 +115,11 @@ POMODORO_TEST_TIMEOUT=8000 npm test                          # custom watchdog b
 POMODORO_SCRIPT=/path/to/build.js npm test                   # test a specific build
 ```
 
-The same checks run in GitHub Actions (`.github/workflows/test.yml`) on every
-push and pull request, and the workflow also rebuilds the script and fails if
-the committed `pomodoro.user.js` is out of date.
+The same checks run in GitHub Actions (`.github/workflows/test.yml`) on Node 22
+on every push and pull request. The workflow also rebuilds the script and fails
+if the committed `pomodoro.user.js` is stale, so remember to run `npm run
+build` before committing changes to the template (`build.mjs` is deterministic,
+which is what makes that check reliable).
 
 ## Troubleshooting
 
