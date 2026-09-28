@@ -12,11 +12,11 @@ jobs:
     # whole job in case something hangs before the watchdog is reached.
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # jsdom 30 requires Node >= 22 (its bundled undici uses a newer Node
       # API), so this is the floor the suite is verified against.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
