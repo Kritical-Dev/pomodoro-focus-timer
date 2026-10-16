@@ -15,7 +15,10 @@ execFileSync(
 );
 
 console.log('2/2  Inlining CSS into ' + FINAL + '…');
-const css = fs.readFileSync(CSS_OUT, 'utf8');
+// rem is relative to the *page's* <html> font-size, which many sites change
+// (e.g. the 62.5% trick), shrinking or growing the widget. Pin it to px.
+const css = fs.readFileSync(CSS_OUT, 'utf8')
+  .replace(/(\d*\.?\d+)rem\b/g, (m, n) => +(Number(n) * 16).toFixed(3) + 'px');
 let js = fs.readFileSync(TEMPLATE, 'utf8');
 if (!js.includes('__TAILWIND_CSS__')) throw new Error('Placeholder __TAILWIND_CSS__ not found in template');
 // Function replacer so "$" sequences in the CSS are never treated specially.

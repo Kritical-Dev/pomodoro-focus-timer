@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pomodoro Focus Timer
 // @namespace    github.com/Kritical-Dev/pomodoro-focus-timer
-// @version      1.3.2
+// @version      1.4.0
 // @description  A modern, customizable Pomodoro timer with per-task and daily focus tracking. Draggable widget, tab-title countdown, cross-tab single instance.
 // @author       KriticalDev
 // @homepageURL  https://github.com/Kritical-Dev/pomodoro-focus-timer
@@ -31,17 +31,18 @@
 
   /* ------------------------------------------------------------------ *
    * Storage (GM_* with localStorage fallback)
+   *
+   * Everything read back is untrusted (older versions, manual edits, other
+   * scripts sharing localStorage), so each key goes through a load*()
+   * sanitiser below before it is used.
    * ------------------------------------------------------------------ */
   const store = {
-    get(key, fallback) {
+    get(key) {
       try {
-        let raw;
-        if (typeof GM_getValue !== 'undefined') raw = GM_getValue(key);
-        else raw = localStorage.getItem(key);
-        if (raw === undefined || raw === null) return fallback;
+        const raw = typeof GM_getValue !== 'undefined' ? GM_getValue(key) : localStorage.getItem(key);
         return typeof raw === 'string' ? JSON.parse(raw) : raw;
       } catch (e) {
-        return fallback;
+        return undefined;
       }
     },
     set(key, value) {
@@ -93,21 +94,21 @@
   // Full literal class names so the Tailwind compiler picks them up.
   const PHASES = {
     focus: {
-      label: 'Focus', icon: '🍅',
+      label: 'Focus', icon: '🍅', setting: 'focusMin',
       ring: 'stroke-rose-500',
       badge: 'bg-rose-500/15 text-rose-400',
       play: 'bg-rose-500 hover:bg-rose-400 shadow-rose-500/30',
       dot: 'bg-rose-500',
     },
     short: {
-      label: 'Short Break', icon: '☕',
+      label: 'Short Break', icon: '☕', setting: 'shortMin',
       ring: 'stroke-emerald-500',
       badge: 'bg-emerald-500/15 text-emerald-400',
       play: 'bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/30',
       dot: 'bg-emerald-500',
     },
     long: {
-      label: 'Long Break', icon: '🌴',
+      label: 'Long Break', icon: '🌴', setting: 'longMin',
       ring: 'stroke-sky-500',
       badge: 'bg-sky-500/15 text-sky-400',
       play: 'bg-sky-500 hover:bg-sky-400 shadow-sky-500/30',
@@ -116,9 +117,10 @@
   };
 
   const RING_LEN = 2 * Math.PI * 54; // r=54 viewBox circle
-  const FLUSH_MS = 15000; // persist focus time at least this often (bounds crash loss)
+  const FLUSH_MS = 15000; // credit focus time to stats at least this often (keeps "Today" live)
   const STATS_KEEP_DAYS = 14;
-  const DAYKEY_MS = 15000; // how long a cached "today" key may be reused
+  const TASK_MAX = 80;
+  const KEYS = { state: 'pomodoro.state', settings: 'pomodoro.settings', stats: 'pomodoro.stats', ui: 'pomodoro.ui', leader: 'pomodoro.leader' };
 
   // Defaults only. Nothing is read from storage at load time — these are
   // filled in by reloadSharedState() when (and only when) this tab becomes
@@ -126,15 +128,19 @@
   // work for the lifetime of the page.
   let settings = Object.assign({}, DEFAULT_SETTINGS);
   let stats = {};
-  const ui = { mode: 'card', hidden: false, pos: null };
+  let ui = { mode: 'card', hidden: false, pos: null };
 
   /* ------------------------------------------------------------------ *
    * Runtime state
+   *
+   * Invariant: the focus time not yet credited to `stats` is always
+   * pendingFocusMs + (min(now, endsAt) - lastTick) while a focus phase runs.
+   * Because that is pure timestamp arithmetic, any saved copy of S is
+   * self-consistent: a tab that is closed, frozen or loses leadership never
+   * has to write anything on the way out, and whoever loads S next credits
+   * exactly the right amount — no loss, no double counting.
    * ------------------------------------------------------------------ */
-  function durationFor(phase) {
-    const min = phase === 'focus' ? settings.focusMin : phase === 'short' ? settings.shortMin : settings.longMin;
-    return min * 60000;
-  }
+  function durationFor(phase) { return settings[PHASES[phase].setting] * 60000; }
 
   function freshState() {
     const d = durationFor('focus');
@@ -147,10 +153,10 @@
 
   let S = freshState();
 
-  function saveState() { store.set('pomodoro.state', S); }
-  function saveSettings() { store.set('pomodoro.settings', settings); }
-  function saveStats() { store.set('pomodoro.stats', stats); }
-  function saveUi() { store.set('pomodoro.ui', ui); }
+  function saveState() { store.set(KEYS.state, S); }
+  function saveSettings() { store.set(KEYS.settings, settings); }
+  function saveStats() { store.set(KEYS.stats, stats); }
+  function saveUi() { store.set(KEYS.ui, ui); }
 
   /* ------------------------------------------------------------------ *
    * Helpers
@@ -158,15 +164,7 @@
   function dkey(d) {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
-  // Cached: render() consults this every tick, and a Date allocation plus
-  // string building per tick is pure overhead. A 15 s staleness window can at
-  // most misattribute a flush that straddles midnight by seconds.
-  let dayKeyCache = '', dayKeyTs = 0;
-  function todayKey() {
-    const now = Date.now();
-    if (now - dayKeyTs > DAYKEY_MS) { dayKeyTs = now; dayKeyCache = dkey(new Date()); }
-    return dayKeyCache;
-  }
+  function todayKey() { return dkey(new Date()); }
 
   function fmtClock(ms) {
     const s = Math.max(0, Math.ceil(ms / 1000));
@@ -188,66 +186,161 @@
   }
 
   function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+  const isObj = v => v !== null && typeof v === 'object';
+  const finite = Number.isFinite;
+  const count = v => (finite(v) && v > 0 ? Math.round(v) : 0);
+
+  // Pages that enforce Trusted Types (YouTube, Gmail, …) reject plain strings
+  // assigned to innerHTML. Every markup string we assign is static or built
+  // with esc(), so an identity policy is safe; it is created on first use.
+  let ttPolicy;
+  function setHTML(node, html) {
+    if (ttPolicy === undefined) {
+      ttPolicy = null;
+      try {
+        if (window.trustedTypes && window.trustedTypes.createPolicy) {
+          ttPolicy = window.trustedTypes.createPolicy('pomodoro-focus-timer', { createHTML: s => s });
+        }
+      } catch (e) { /* policy name not allow-listed — fall back to plain strings */ }
+    }
+    node.innerHTML = ttPolicy ? ttPolicy.createHTML(html) : html;
+  }
 
   function dayStats() {
     const k = todayKey();
-    if (!stats[k]) stats[k] = { focus: 0, rounds: 0, tasks: {} };
+    if (!stats[k]) stats[k] = { focus: 0, rounds: 0, tasks: Object.create(null) };
     return stats[k];
   }
 
-  function pruneStats() {
+  /* ------------------------------------------------------------------ *
+   * Loading (sanitised)
+   * ------------------------------------------------------------------ */
+  function loadSettings(raw) {
+    const s = Object.assign({}, DEFAULT_SETTINGS);
+    if (!isObj(raw)) return s;
+    for (const k of Object.keys(DEFAULT_SETTINGS)) {
+      const v = raw[k];
+      if (RANGES[k]) { if (finite(v)) s[k] = clamp(Math.round(v), RANGES[k][0], RANGES[k][1]); }
+      else if (typeof v === 'boolean') s[k] = v;
+    }
+    return s;
+  }
+
+  // Task maps are null-prototype objects, so task names such as "constructor"
+  // or "__proto__" are ordinary keys instead of inherited members.
+  function loadStats(raw) {
+    const out = {};
+    if (!isObj(raw)) return out;
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - STATS_KEEP_DAYS);
     const cKey = dkey(cutoff);
-    for (const k of Object.keys(stats)) if (k < cKey) delete stats[k];
+    for (const k of Object.keys(raw)) {
+      const d = raw[k];
+      if (!/^\d{4}-\d\d-\d\d$/.test(k) || k < cKey || !isObj(d)) continue;
+      const tasks = Object.create(null);
+      if (isObj(d.tasks)) for (const name of Object.keys(d.tasks)) { const sec = count(d.tasks[name]); if (sec) tasks[name] = sec; }
+      out[k] = { focus: count(d.focus), rounds: count(d.rounds), tasks };
+    }
+    return out;
+  }
+
+  function loadUi(raw) {
+    const r = isObj(raw) ? raw : {};
+    const p = r.pos;
+    return {
+      mode: r.mode === 'pill' ? 'pill' : 'card',
+      hidden: r.hidden === true,
+      pos: isObj(p) && finite(p.left) && finite(p.top) ? { left: p.left, top: p.top } : null,
+    };
+  }
+
+  function loadState(raw) {
+    const s = freshState();
+    if (!isObj(raw) || !Object.prototype.hasOwnProperty.call(PHASES, raw.phase)) return s;
+    const now = Date.now();
+    s.phase = raw.phase;
+    s.round = finite(raw.round) ? clamp(Math.round(raw.round), 1, settings.rounds) : 1;
+    s.duration = finite(raw.duration) && raw.duration > 0 ? Math.min(raw.duration, 180 * 60000) : durationFor(s.phase);
+    s.remaining = finite(raw.remaining) ? clamp(raw.remaining, 0, s.duration) : s.duration;
+    s.task = typeof raw.task === 'string' ? raw.task.slice(0, TASK_MAX) : '';
+    if (raw.running === true && finite(raw.endsAt)) {
+      s.running = true;
+      // A clock that was moved backwards must not stretch the phase.
+      s.endsAt = Math.min(raw.endsAt, now + s.duration);
+      s.lastTick = finite(raw.lastTick) ? clamp(raw.lastTick, s.endsAt - s.duration, now) : now;
+    }
+    s.pendingFocusMs = finite(raw.pendingFocusMs) ? clamp(raw.pendingFocusMs, -1000, s.duration) : 0;
+    return s;
   }
 
   /* ------------------------------------------------------------------ *
    * Focus-time accounting
    * ------------------------------------------------------------------ */
+  // Bank the time since lastTick. Capped at endsAt, so a phase that ran out
+  // while the machine slept (or no tab was leading) credits only its own
+  // length, and floored at 0, so a clock moved backwards credits nothing.
+  function accrue(now) {
+    if (S.running && S.phase === 'focus') S.pendingFocusMs += Math.max(0, Math.min(now, S.endsAt) - S.lastTick);
+    S.lastTick = now;
+  }
+
+  // Move banked time into today's stats. Whole seconds only; the sub-second
+  // remainder stays pending so nothing is rounded away over many flushes.
+  // S is saved alongside stats so the stored pair stays consistent.
   function flushFocus() {
-    if (S.running && S.phase === 'focus') {
-      const now = Date.now();
-      S.pendingFocusMs += now - S.lastTick;
-      S.lastTick = now;
-    }
+    accrue(Date.now());
     const sec = Math.round(S.pendingFocusMs / 1000);
-    if (sec > 0) {
-      const d = dayStats();
-      d.focus += sec;
-      const name = (S.task || '').trim() || 'Untracked';
-      d.tasks[name] = (d.tasks[name] || 0) + sec;
-      pruneStats();
-      saveStats();
-    }
-    S.pendingFocusMs = 0;
+    if (sec <= 0) return;
+    const d = dayStats();
+    const name = S.task.trim() || 'Untracked';
+    d.focus += sec;
+    d.tasks[name] = (d.tasks[name] || 0) + sec;
+    S.pendingFocusMs -= sec * 1000;
+    saveStats();
+    saveState();
   }
 
   /* ------------------------------------------------------------------ *
    * Sound & notifications
    * ------------------------------------------------------------------ */
   let actx = null;
-  function tone(freq, at, dur) {
-    const o = actx.createOscillator();
-    const g = actx.createGain();
+  // Created/resumed from a click inside the widget so autoplay policies let
+  // the completion chime play later, even from a background tab.
+  function audio() {
+    try {
+      if (!actx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        actx = new AC();
+      }
+      if (actx.state === 'suspended') Promise.resolve(actx.resume()).catch(() => {});
+      return actx;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function tone(ctx, freq, at, dur) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
     o.type = 'sine';
     o.frequency.value = freq;
-    const t0 = actx.currentTime + at;
+    const t0 = ctx.currentTime + at;
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g).connect(actx.destination);
+    o.connect(g).connect(ctx.destination);
     o.start(t0);
     o.stop(t0 + dur + 0.05);
   }
 
   function chime(kind) {
     if (!settings.sound) return;
+    const ctx = audio();
+    if (!ctx) return;
     try {
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-      if (actx.state === 'suspended') actx.resume();
-      if (kind === 'focusDone') { tone(523.25, 0, 0.18); tone(659.25, 0.18, 0.18); tone(783.99, 0.36, 0.35); }
-      else { tone(783.99, 0, 0.18); tone(659.25, 0.18, 0.18); tone(523.25, 0.36, 0.35); }
+      const notes = kind === 'focusDone' ? [523.25, 659.25, 783.99] : [783.99, 659.25, 523.25];
+      notes.forEach((f, i) => tone(ctx, f, i * 0.18, i === 2 ? 0.35 : 0.18));
     } catch (e) { /* audio blocked */ }
   }
 
@@ -256,14 +349,11 @@
     try {
       if (typeof GM_notification !== 'undefined') {
         GM_notification({ title, text, timeout: 6000 });
-        return;
-      }
-      if ('Notification' in window) {
-        if (Notification.permission === 'granted') new Notification(title, { body: text });
+      } else if ('Notification' in window) {
+        const show = () => new Notification(title, { body: text });
+        if (Notification.permission === 'granted') show();
         else if (Notification.permission !== 'denied') {
-          Notification.requestPermission().then(p => {
-            if (p === 'granted') new Notification(title, { body: text });
-          });
+          Promise.resolve(Notification.requestPermission()).then(p => { if (p === 'granted') show(); }, () => {});
         }
       }
     } catch (e) { /* notifications unavailable */ }
@@ -281,8 +371,6 @@
    * throttled or coalesced wakeups introduce no drift.
    * ------------------------------------------------------------------ */
   let wakeTimer = null;
-  let lastCompleteTs = 0; // when the last phase completed (real time)
-  let rapidSteps = 0;     // consecutive same-instant completions (catch-up chain)
 
   function stopTicker() { if (wakeTimer !== null) { clearTimeout(wakeTimer); wakeTimer = null; } }
 
@@ -312,11 +400,11 @@
 
   function pause() {
     if (!S.running) return;
+    flushFocus(); // while still running, so the time since the last wake counts
     S.remaining = Math.max(0, S.endsAt - Date.now());
     S.running = false;
     S.endsAt = 0;
     stopTicker();
-    flushFocus();
     saveState();
     render();
   }
@@ -328,70 +416,53 @@
     pause();
     S.phase = 'focus';
     S.round = 1;
-    S.duration = durationFor('focus');
-    S.remaining = S.duration;
+    S.duration = S.remaining = durationFor('focus');
     saveState();
     render();
   }
 
-  // Move to the next phase. `announce` controls chime/notification.
-  function advancePhase(announce) {
+  // Move to the next phase. `completed` is false for a manual skip (no round
+  // is credited); `announce` controls the chime and notification.
+  function advancePhase(completed, announce) {
     flushFocus();
     const finished = S.phase;
-    // Phases that elapsed while the page was frozen/discarded complete
-    // back-to-back in the same instant. Those catch-up steps must not each
-    // fire a chime and desktop notification, and an absurd burst of them
-    // (e.g. 1-minute phases after a long sleep) parks the timer instead.
-    const now = Date.now();
-    const catchingUp = now - lastCompleteTs < 1000;
-    rapidSteps = catchingUp ? rapidSteps + 1 : 0;
-    lastCompleteTs = now;
-
     if (finished === 'focus') {
-      dayStats().rounds += 1;
-      saveStats();
+      if (completed) { dayStats().rounds += 1; saveStats(); }
       S.phase = S.round >= settings.rounds ? 'long' : 'short';
     } else {
-      S.round = finished === 'long' ? 1 : S.round + 1;
+      S.round = finished === 'long' ? 1 : Math.min(S.round + 1, settings.rounds);
       S.phase = 'focus';
     }
-    S.duration = durationFor(S.phase);
-    S.remaining = S.duration;
+    S.duration = S.remaining = durationFor(S.phase);
     S.running = false;
     S.endsAt = 0;
 
-    if (announce && !catchingUp) {
+    if (announce) {
       chime(finished === 'focus' ? 'focusDone' : 'breakDone');
-      const p = PHASES[S.phase];
       notify(
         finished === 'focus' ? 'Focus round complete!' : 'Break over!',
         finished === 'focus'
-          ? 'Time for your ' + p.label.toLowerCase() + ' (' + Math.round(S.duration / 60000) + ' min).'
+          ? 'Time for your ' + PHASES[S.phase].label.toLowerCase() + ' (' + Math.round(S.duration / 60000) + ' min).'
           : 'Back to focus — round ' + S.round + ' of ' + settings.rounds + '.'
       );
     }
 
-    const auto = (S.phase === 'focus' ? settings.autoFocus : settings.autoBreaks) && rapidSteps < 20;
-    if (auto) start(); else { stopTicker(); saveState(); render(); }
+    // The next phase always starts from *now* (never back-dated to when the
+    // previous one ended), so phases cannot chain-complete in a burst.
+    if (S.phase === 'focus' ? settings.autoFocus : settings.autoBreaks) start();
+    else { stopTicker(); saveState(); render(); }
   }
 
-  function skip() { ensureLeader(); advancePhase(false); }
+  function skip() { ensureLeader(); advancePhase(false, false); }
 
   function tick() {
     wakeTimer = null;
     if (!isLeader || !S.running) return;
     const now = Date.now();
-    if (S.phase === 'focus') {
-      S.pendingFocusMs += now - S.lastTick;
-      if (S.pendingFocusMs >= FLUSH_MS) flushFocus();
-    }
-    S.lastTick = now;
-    S.remaining = S.endsAt - now;
-    if (S.remaining <= 0) {
-      S.remaining = 0;
-      advancePhase(true);
-      return;
-    }
+    S.remaining = Math.max(0, S.endsAt - now);
+    if (S.remaining === 0) { advancePhase(true, true); return; }
+    accrue(now);
+    if (S.pendingFocusMs >= FLUSH_MS) flushFocus();
     // No repaint while backgrounded — the schedule already sleeps to the
     // phase boundary in that case, so this only runs when someone can see it.
     if (!document.hidden) render();
@@ -422,122 +493,126 @@
   function stepperRow(key, label) {
     const name = label.replace(' (min)', '').toLowerCase();
     return (
-      '<div class="flex items-center justify-between gap-2">' +
-        '<span class="text-[13px] text-slate-300">' + label + '</span>' +
-        '<div class="flex items-center gap-1.5">' +
-          '<button class="pw-stepbtn" data-step="' + key + ':-1" title="Decrease" aria-label="Decrease ' + name + '">' + ICONS.sub + '</button>' +
-          '<input id="pw-set-' + key + '" type="number" inputmode="numeric" min="' + RANGES[key][0] + '" max="' + RANGES[key][1] + '" aria-label="' + name + '" ' +
-            'class="pw-num w-11 select-text rounded-md border border-slate-700/70 bg-slate-800/70 py-0.5 text-center text-[13px] font-semibold tabular-nums text-slate-100 outline-none focus:border-rose-500/60"/>' +
-          '<button class="pw-stepbtn" data-step="' + key + ':1" title="Increase" aria-label="Increase ' + name + '">' + ICONS.plus + '</button>' +
+        '<div class="flex items-center justify-between gap-2">' +
+          '<span class="text-[13px] text-slate-300">' + label + '</span>' +
+          '<div class="flex items-center gap-1.5">' +
+            '<button class="pw-stepbtn" data-step="' + key + ':-1" title="Decrease" aria-label="Decrease ' + name + '">' + ICONS.sub + '</button>' +
+            '<input id="pw-set-' + key + '" type="number" inputmode="numeric" min="' + RANGES[key][0] + '" max="' + RANGES[key][1] + '" aria-label="' + name + '" ' +
+              'class="pw-num w-11 select-text rounded-md border border-slate-700/70 bg-slate-800/70 py-0.5 text-center text-[13px] font-semibold tabular-nums text-slate-100 outline-none focus:border-rose-500/60"/>' +
+            '<button class="pw-stepbtn" data-step="' + key + ':1" title="Increase" aria-label="Increase ' + name + '">' + ICONS.plus + '</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    function toggleRow(key, label) {
+      return (
+        '<label class="flex cursor-pointer items-center justify-between select-none">' +
+          '<span class="text-[13px] text-slate-300">' + label + '</span>' +
+          '<input type="checkbox" id="pw-tgl-' + key + '" class="peer sr-only">' +
+          '<span class="relative h-5 w-9 rounded-full bg-slate-700 transition-colors peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-slate-400 after:transition-all peer-checked:after:translate-x-4 peer-checked:after:bg-white"></span>' +
+        '</label>'
+      );
+    }
+
+    // Built on demand (leader only) rather than at load time on every page.
+    function markup() {
+      return (
+      '<div id="pw-wrap" class="select-none font-sans text-sm leading-normal tracking-normal text-slate-100 antialiased">' +
+        '<div id="pw-card" class="w-[290px] overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl shadow-black/50">' +
+
+          // Header (drag handle)
+          '<div id="pw-header" class="flex cursor-move items-center gap-1 border-b border-slate-800 px-3 py-2">' +
+            '<span class="text-base leading-none">🍅</span>' +
+            '<span class="flex-1 text-[13px] font-semibold tracking-wide text-slate-300">Pomodoro</span>' +
+            '<button data-act="stats" title="Stats" aria-label="Stats" class="pw-iconbtn">' + ICONS.chart + '</button>' +
+            '<button data-act="settings" title="Settings" aria-label="Settings" class="pw-iconbtn">' + ICONS.gear + '</button>' +
+            '<button data-act="min" title="Minimize to pill" aria-label="Minimize to pill" class="pw-iconbtn">' + ICONS.minus + '</button>' +
+            '<button data-act="hide" title="Hide (reopen from the drawer tab, bottom-left)" aria-label="Hide widget" class="pw-iconbtn">' + ICONS.chevDown + '</button>' +
+          '</div>' +
+
+          // Timer view
+          '<div id="pw-view-timer" class="px-4 pb-4 pt-3">' +
+            '<div class="flex items-center justify-between">' +
+              '<span id="pw-phase" class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-rose-500/15 text-rose-400">Focus</span>' +
+              '<span id="pw-rounds" class="text-[11px] font-medium text-slate-400">Round 1/4</span>' +
+            '</div>' +
+            '<div class="relative mx-auto my-3 h-44 w-44">' +
+              '<svg viewBox="0 0 120 120" class="h-44 w-44 -rotate-90" aria-hidden="true">' +
+                '<circle cx="60" cy="60" r="54" fill="none" stroke-width="8" class="stroke-slate-700/50"/>' +
+                '<circle id="pw-ring" cx="60" cy="60" r="54" fill="none" stroke-width="8" stroke-linecap="round" class="stroke-rose-500" stroke-dasharray="' + RING_LEN.toFixed(3) + '" stroke-dashoffset="0"/>' +
+              '</svg>' +
+              '<div class="absolute inset-0 flex flex-col items-center justify-center">' +
+                '<div id="pw-time" role="timer" class="text-3xl font-bold tabular-nums tracking-tight text-slate-50">25:00</div>' +
+                '<div id="pw-state" role="status" aria-live="polite" class="mt-0.5 text-[11px] font-medium text-slate-400">Ready</div>' +
+              '</div>' +
+            '</div>' +
+            '<input id="pw-task" type="text" placeholder="What are you working on?" maxlength="80" aria-label="Current task" ' +
+              'class="mb-3 w-full select-text rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-1.5 text-[13px] text-slate-100 placeholder-slate-500 outline-none focus:border-rose-500/60"/>' +
+            '<div class="flex items-center justify-center gap-3">' +
+              '<button data-act="reset" title="Reset to round 1" aria-label="Reset to round 1" class="pw-ctl">' + ICONS.reset + '</button>' +
+              '<button data-act="toggle" id="pw-play" title="Start / Pause" aria-label="Start or pause" class="flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-105 bg-rose-500 hover:bg-rose-400 shadow-rose-500/30">' + ICONS.play + '</button>' +
+              '<button data-act="skip" title="Skip to next phase" aria-label="Skip to next phase" class="pw-ctl">' + ICONS.skip + '</button>' +
+            '</div>' +
+            '<div id="pw-today" class="mt-3 border-t border-slate-800 pt-2 text-center text-[11px] text-slate-400">Today: 0m focused · 0 rounds</div>' +
+          '</div>' +
+
+          // Settings view
+          '<div id="pw-view-settings" class="hidden px-4 pb-4 pt-3">' +
+            '<div class="mb-3 flex items-center gap-2">' +
+              '<button data-act="back" title="Back" class="pw-iconbtn">' + ICONS.back + '</button>' +
+              '<span class="text-[13px] font-semibold text-slate-200">Settings</span>' +
+            '</div>' +
+            '<div class="space-y-2.5">' +
+              SETTING_ROWS.map(r => stepperRow(r[0], r[1])).join('') +
+            '</div>' +
+            '<div class="mt-3 space-y-2 border-t border-slate-800 pt-3">' +
+              TOGGLES.map(t => toggleRow(t[0], t[1])).join('') +
+            '</div>' +
+            '<button id="pw-reset-settings" data-act="defaults" title="Restore the default 25/5/15 x 4 configuration" ' +
+              'class="mt-3 w-full rounded-lg border border-slate-700/70 py-1.5 text-[12px] font-medium text-slate-400 transition-colors hover:bg-slate-800/70 hover:text-slate-100">Reset settings to defaults</button>' +
+            '<p class="mt-2 text-[11px] leading-relaxed text-slate-500">Changes apply immediately. A running phase keeps its current duration; new durations apply to the next phase.</p>' +
+          '</div>' +
+
+          // Stats view
+          '<div id="pw-view-stats" class="hidden px-4 pb-4 pt-3">' +
+            '<div class="mb-3 flex items-center gap-2">' +
+              '<button data-act="back" title="Back" class="pw-iconbtn">' + ICONS.back + '</button>' +
+              '<span class="flex-1 text-[13px] font-semibold text-slate-200">Stats</span>' +
+              '<button data-act="clearstats" title="Clear today\'s stats" class="pw-iconbtn">' + ICONS.trash + '</button>' +
+            '</div>' +
+            '<div class="grid grid-cols-2 gap-2">' +
+              '<div class="rounded-xl bg-slate-800/70 p-2.5 text-center">' +
+                '<div id="pw-stat-focus" class="text-lg font-bold text-slate-50">0m</div>' +
+                '<div class="pw-label">Focused today</div>' +
+              '</div>' +
+              '<div class="rounded-xl bg-slate-800/70 p-2.5 text-center">' +
+                '<div id="pw-stat-rounds" class="text-lg font-bold text-slate-50">0</div>' +
+                '<div class="pw-label">Rounds today</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="pw-label mt-3">Last 7 days</div>' +
+            '<div id="pw-chart" class="mt-1 flex h-24 items-end gap-1.5 rounded-xl bg-slate-800/70 p-2"></div>' +
+            '<div id="pw-week-total" class="mt-1.5 text-center text-[11px] text-slate-400">This week: 0m</div>' +
+            '<div class="pw-label mt-3">Tasks today</div>' +
+            '<div id="pw-tasks" class="mt-1 max-h-32 space-y-1 overflow-y-auto pr-0.5"></div>' +
+          '</div>' +
         '</div>' +
+
+        // Minimized pill
+        '<button id="pw-pill" class="hidden cursor-pointer items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900 px-3.5 py-1.5 text-slate-100 shadow-xl shadow-black/40">' +
+          '<span id="pw-pill-dot" class="h-2 w-2 rounded-full bg-rose-500"></span>' +
+          '<span id="pw-pill-time" class="text-[13px] font-semibold tabular-nums">25:00</span>' +
+        '</button>' +
+
+        // Drawer tab — fixed at the bottom-left of the viewport; toggles the widget.
+        '<button id="pw-tab" title="Show Pomodoro" class="hidden fixed bottom-0 left-4 flex items-center gap-1.5 rounded-t-lg border border-b-0 border-slate-700/60 bg-slate-900 px-3 py-1.5 text-slate-400 shadow-lg shadow-black/40 transition-colors hover:bg-slate-800 hover:text-slate-100">' +
+          '<span id="pw-tab-icon" class="flex items-center">' + ICONS.chevUp + '</span>' +
+          '<span class="text-[11px] font-semibold tracking-wide">Pomodoro</span>' +
+        '</button>' +
       '</div>'
     );
   }
-
-  function toggleRow(key, label) {
-    return (
-      '<label class="flex cursor-pointer items-center justify-between select-none">' +
-        '<span class="text-[13px] text-slate-300">' + label + '</span>' +
-        '<input type="checkbox" id="pw-tgl-' + key + '" class="peer sr-only">' +
-        '<span class="relative h-5 w-9 rounded-full bg-slate-700 transition-colors peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-slate-400 after:transition-all peer-checked:after:translate-x-4 peer-checked:after:bg-white"></span>' +
-      '</label>'
-    );
-  }
-
-  const HTML =
-    '<div id="pw-wrap" class="select-none font-sans text-sm leading-normal tracking-normal text-slate-100 antialiased">' +
-      '<div id="pw-card" class="w-[290px] overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl shadow-black/50">' +
-
-        // Header (drag handle)
-        '<div id="pw-header" class="flex cursor-move items-center gap-1 border-b border-slate-800 px-3 py-2">' +
-          '<span class="text-base leading-none">🍅</span>' +
-          '<span class="flex-1 text-[13px] font-semibold tracking-wide text-slate-300">Pomodoro</span>' +
-          '<button data-act="stats" title="Stats" aria-label="Stats" class="pw-iconbtn">' + ICONS.chart + '</button>' +
-          '<button data-act="settings" title="Settings" aria-label="Settings" class="pw-iconbtn">' + ICONS.gear + '</button>' +
-          '<button data-act="min" title="Minimize to pill" aria-label="Minimize to pill" class="pw-iconbtn">' + ICONS.minus + '</button>' +
-          '<button data-act="hide" title="Hide (reopen from the drawer tab, bottom-left)" aria-label="Hide widget" class="pw-iconbtn">' + ICONS.chevDown + '</button>' +
-        '</div>' +
-
-        // Timer view
-        '<div id="pw-view-timer" class="px-4 pb-4 pt-3">' +
-          '<div class="flex items-center justify-between">' +
-            '<span id="pw-phase" class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-rose-500/15 text-rose-400">Focus</span>' +
-            '<span id="pw-rounds" class="text-[11px] font-medium text-slate-400">Round 1/4</span>' +
-          '</div>' +
-          '<div class="relative mx-auto my-3 h-44 w-44">' +
-            '<svg viewBox="0 0 120 120" class="h-44 w-44 -rotate-90" aria-hidden="true">' +
-              '<circle cx="60" cy="60" r="54" fill="none" stroke-width="8" class="stroke-slate-700/50"/>' +
-              '<circle id="pw-ring" cx="60" cy="60" r="54" fill="none" stroke-width="8" stroke-linecap="round" class="stroke-rose-500" stroke-dasharray="' + RING_LEN.toFixed(3) + '" stroke-dashoffset="0"/>' +
-            '</svg>' +
-            '<div class="absolute inset-0 flex flex-col items-center justify-center">' +
-              '<div id="pw-time" role="timer" class="text-3xl font-bold tabular-nums tracking-tight text-slate-50">25:00</div>' +
-              '<div id="pw-state" role="status" aria-live="polite" class="mt-0.5 text-[11px] font-medium text-slate-400">Ready</div>' +
-            '</div>' +
-          '</div>' +
-          '<input id="pw-task" type="text" placeholder="What are you working on?" maxlength="80" aria-label="Current task" ' +
-            'class="mb-3 w-full select-text rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-1.5 text-[13px] text-slate-100 placeholder-slate-500 outline-none focus:border-rose-500/60"/>' +
-          '<div class="flex items-center justify-center gap-3">' +
-            '<button data-act="reset" title="Reset to round 1" aria-label="Reset to round 1" class="pw-ctl">' + ICONS.reset + '</button>' +
-            '<button data-act="toggle" id="pw-play" title="Start / Pause" aria-label="Start or pause" class="flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-105 bg-rose-500 hover:bg-rose-400 shadow-rose-500/30">' + ICONS.play + '</button>' +
-            '<button data-act="skip" title="Skip to next phase" aria-label="Skip to next phase" class="pw-ctl">' + ICONS.skip + '</button>' +
-          '</div>' +
-          '<div id="pw-today" class="mt-3 border-t border-slate-800 pt-2 text-center text-[11px] text-slate-400">Today: 0m focused · 0 rounds</div>' +
-        '</div>' +
-
-        // Settings view
-        '<div id="pw-view-settings" class="hidden px-4 pb-4 pt-3">' +
-          '<div class="mb-3 flex items-center gap-2">' +
-            '<button data-act="back" title="Back" class="pw-iconbtn">' + ICONS.back + '</button>' +
-            '<span class="text-[13px] font-semibold text-slate-200">Settings</span>' +
-          '</div>' +
-          '<div class="space-y-2.5">' +
-            SETTING_ROWS.map(r => stepperRow(r[0], r[1])).join('') +
-          '</div>' +
-          '<div class="mt-3 space-y-2 border-t border-slate-800 pt-3">' +
-            TOGGLES.map(t => toggleRow(t[0], t[1])).join('') +
-          '</div>' +
-          '<button id="pw-reset-settings" title="Restore the default 25/5/15 x 4 configuration" ' +
-            'class="mt-3 w-full rounded-lg border border-slate-700/70 py-1.5 text-[12px] font-medium text-slate-400 transition-colors hover:bg-slate-800/70 hover:text-slate-100">Reset settings to defaults</button>' +
-          '<p class="mt-2 text-[11px] leading-relaxed text-slate-500">Changes apply immediately. A running phase keeps its current duration; new durations apply to the next phase.</p>' +
-        '</div>' +
-
-        // Stats view
-        '<div id="pw-view-stats" class="hidden px-4 pb-4 pt-3">' +
-          '<div class="mb-3 flex items-center gap-2">' +
-            '<button data-act="back" title="Back" class="pw-iconbtn">' + ICONS.back + '</button>' +
-            '<span class="flex-1 text-[13px] font-semibold text-slate-200">Stats</span>' +
-            '<button data-act="clearstats" title="Clear today\'s stats" class="pw-iconbtn">' + ICONS.trash + '</button>' +
-          '</div>' +
-          '<div class="grid grid-cols-2 gap-2">' +
-            '<div class="rounded-xl bg-slate-800/70 p-2.5 text-center">' +
-              '<div id="pw-stat-focus" class="text-lg font-bold text-slate-50">0m</div>' +
-              '<div class="pw-label">Focused today</div>' +
-            '</div>' +
-            '<div class="rounded-xl bg-slate-800/70 p-2.5 text-center">' +
-              '<div id="pw-stat-rounds" class="text-lg font-bold text-slate-50">0</div>' +
-              '<div class="pw-label">Rounds today</div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="pw-label mt-3">Last 7 days</div>' +
-          '<div id="pw-chart" class="mt-1 flex h-24 items-end gap-1.5 rounded-xl bg-slate-800/70 p-2"></div>' +
-          '<div id="pw-week-total" class="mt-1.5 text-center text-[11px] text-slate-400">This week: 0m</div>' +
-          '<div class="pw-label mt-3">Tasks today</div>' +
-          '<div id="pw-tasks" class="mt-1 max-h-32 space-y-1 overflow-y-auto pr-0.5"></div>' +
-        '</div>' +
-      '</div>' +
-
-      // Minimized pill
-      '<button id="pw-pill" class="hidden cursor-pointer items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900 px-3.5 py-1.5 text-slate-100 shadow-xl shadow-black/40">' +
-        '<span id="pw-pill-dot" class="h-2 w-2 rounded-full bg-rose-500"></span>' +
-        '<span id="pw-pill-time" class="text-[13px] font-semibold tabular-nums">25:00</span>' +
-      '</button>' +
-
-      // Drawer tab — fixed at the bottom-left of the viewport; toggles the widget.
-      '<button id="pw-tab" title="Show Pomodoro" class="hidden fixed bottom-0 left-4 flex items-center gap-1.5 rounded-t-lg border border-b-0 border-slate-700/60 bg-slate-900 px-3 py-1.5 text-slate-400 shadow-lg shadow-black/40 transition-colors hover:bg-slate-800 hover:text-slate-100">' +
-        '<span id="pw-tab-icon" class="flex items-center">' + ICONS.chevUp + '</span>' +
-        '<span class="text-[11px] font-semibold tracking-wide">Pomodoro</span>' +
-      '</button>' +
-    '</div>';
 
   /* ------------------------------------------------------------------ *
    * UI — lazy construction
@@ -549,60 +624,72 @@
    * browsing session, in the single tab that leads.
    * ------------------------------------------------------------------ */
   let host = null, shadow = null, el = null, $ = null;
-  let built = false;
+  let built = false, buildTried = false;
 
   function buildUI() {
-    if (built) return;
-    built = true;
+    if (buildTried) return;
+    buildTried = true;
+    try {
+      host = document.createElement('div');
+      host.id = 'pomodoro-focus-timer-host';
+      // `all: initial` stops the page's inherited styles (text-transform,
+      // letter-spacing, visibility, …) from leaking into the shadow tree.
+      // Inline !important beats any page stylesheet rule on the host.
+      host.style.setProperty('all', 'initial', 'important');
+      host.style.setProperty('position', 'fixed', 'important');
+      host.style.setProperty('z-index', '2147483647', 'important');
+      // The host is never display:none'd — the drawer tab must stay visible.
+      // Widget visibility is toggled inside the shadow root instead.
+      shadow = host.attachShadow({ mode: 'open' });
 
-    host = document.createElement('div');
-    host.id = 'pomodoro-focus-timer-host';
-    shadow = host.attachShadow({ mode: 'open' });
+      const styleEl = document.createElement('style');
+      styleEl.textContent = TAILWIND_CSS;
+      shadow.appendChild(styleEl);
 
-    const st = host.style;
-    st.setProperty('position', 'fixed', 'important');
-    st.setProperty('z-index', '2147483647', 'important');
-    if (ui.pos && typeof ui.pos.left === 'number') {
-      st.setProperty('left', ui.pos.left + 'px', 'important');
-      st.setProperty('top', ui.pos.top + 'px', 'important');
-    } else {
-      st.setProperty('right', '20px', 'important');
-      st.setProperty('bottom', '20px', 'important');
+      const container = document.createElement('div');
+      setHTML(container, markup());
+      shadow.appendChild(container);
+
+      $ = sel => shadow.querySelector(sel);
+      el = {
+        card: $('#pw-card'), pill: $('#pw-pill'),
+        phase: $('#pw-phase'), rounds: $('#pw-rounds'),
+        ring: $('#pw-ring'), time: $('#pw-time'), state: $('#pw-state'),
+        task: $('#pw-task'), play: $('#pw-play'), today: $('#pw-today'),
+        pillDot: $('#pw-pill-dot'), pillTime: $('#pw-pill-time'),
+        viewTimer: $('#pw-view-timer'), viewSettings: $('#pw-view-settings'), viewStats: $('#pw-view-stats'),
+        statFocus: $('#pw-stat-focus'), statRounds: $('#pw-stat-rounds'),
+        chart: $('#pw-chart'), tasks: $('#pw-tasks'), weekTotal: $('#pw-week-total'),
+        tab: $('#pw-tab'), tabIcon: $('#pw-tab-icon'),
+      };
+      bindEvents();
+      watchSiteTitle();
+      (document.body || document.documentElement).appendChild(host);
+      built = true;
+    } catch (e) {
+      // The timer, tab title and notifications keep working without a widget.
+      if (host) host.remove();
+      host = shadow = el = null;
     }
-    // The host is never display:none'd — the drawer tab must stay visible.
-    // Widget visibility is toggled inside the shadow root instead.
-
-    const styleEl = document.createElement('style');
-    styleEl.textContent = TAILWIND_CSS;
-    shadow.appendChild(styleEl);
-
-    const container = document.createElement('div');
-    container.innerHTML = HTML;
-    shadow.appendChild(container);
-
-    $ = sel => shadow.querySelector(sel);
-    el = {
-      card: $('#pw-card'), pill: $('#pw-pill'),
-      phase: $('#pw-phase'), rounds: $('#pw-rounds'),
-      ring: $('#pw-ring'), time: $('#pw-time'), state: $('#pw-state'),
-      task: $('#pw-task'), play: $('#pw-play'), today: $('#pw-today'),
-      pillDot: $('#pw-pill-dot'), pillTime: $('#pw-pill-time'),
-      viewTimer: $('#pw-view-timer'), viewSettings: $('#pw-view-settings'), viewStats: $('#pw-view-stats'),
-      statFocus: $('#pw-stat-focus'), statRounds: $('#pw-stat-rounds'),
-      chart: $('#pw-chart'), tasks: $('#pw-tasks'), weekTotal: $('#pw-week-total'),
-      tab: $('#pw-tab'), tabIcon: $('#pw-tab-icon'),
-    };
-    el.task.value = S.task || '';
-    watchSiteTitle();
-    bindEvents();
-    (document.body || document.documentElement).appendChild(host);
   }
 
   // A few SPAs replace document.body wholesale, which would take the widget
   // with it. Re-attaching is a cheap isConnected check on each render.
   function ensureMounted() {
-    if (!built || host.isConnected) return;
-    (document.body || document.documentElement).appendChild(host);
+    if (!host.isConnected) (document.body || document.documentElement).appendChild(host);
+  }
+
+  // Single place that positions the host: clamps into the viewport so a
+  // position saved in a larger window (or another tab) is always reachable.
+  // The saved position itself is left untouched.
+  function place(pos, size) {
+    const set = (prop, v) => host.style.setProperty(prop, v, 'important');
+    if (!pos) { set('left', 'auto'); set('top', 'auto'); set('right', '20px'); set('bottom', '20px'); return; }
+    const r = size || host.getBoundingClientRect();
+    set('left', clamp(pos.left, 4, Math.max(4, window.innerWidth - r.width - 4)) + 'px');
+    set('top', clamp(pos.top, 4, Math.max(4, window.innerHeight - r.height - 4)) + 'px');
+    set('right', 'auto');
+    set('bottom', 'auto');
   }
 
   /* ------------------------------------------------------------------ *
@@ -610,105 +697,81 @@
    * ------------------------------------------------------------------ */
   /* render() is called on every tick, so every DOM write is guarded by a
    * change cache — a steady-state tick performs zero DOM mutations. */
-  let lastTimeStr = '', lastTitleKey = '', lastPhaseKey = '', lastPlayKey = '';
-  let lastStateText = '', lastRoundsText = '', lastOffset = -1;
-  let lastFooterFocus = -1, lastFooterRounds = -1;
-
-  function resetRenderCaches() {
-    lastTimeStr = lastTitleKey = lastPhaseKey = lastPlayKey = lastStateText = lastRoundsText = '';
-    lastOffset = -1;
-    lastFooterFocus = lastFooterRounds = -1;
+  let painted = {};
+  function changed(key, value) {
+    if (painted[key] === value) return false;
+    painted[key] = value;
+    return true;
   }
 
   function render() {
     if (!isLeader || !built) return;
     ensureMounted();
-
-    const surface = ui.hidden ? 'none' : ui.mode; // 'card' | 'pill' | 'none'
     const timeStr = fmtClock(S.remaining);
+    const p = PHASES[S.phase];
 
     // The tab-title countdown is independent of widget visibility, so it is
     // refreshed before any early return for a hidden widget.
-    const titleKey = timeStr + '|' + S.phase + '|' + (S.task || '');
-    if (titleKey !== lastTitleKey) {
-      lastTitleKey = titleKey;
-      renderTitle(timeStr);
-    }
+    if (changed('title', timeStr + '|' + S.phase + '|' + S.task + '|' + settings.titleTimer)) renderTitle(timeStr);
 
+    const surface = ui.hidden ? 'none' : ui.mode; // 'card' | 'pill' | 'none'
     if (surface === 'none') return;
 
-    if (timeStr !== lastTimeStr) {
-      lastTimeStr = timeStr;
-      if (surface === 'card') el.time.textContent = timeStr;
-      else el.pillTime.textContent = timeStr;
-    }
-
-    // Phase styling changes once per phase — cheap either way.
-    if (S.phase !== lastPhaseKey) {
-      const p = PHASES[S.phase];
-      lastPhaseKey = S.phase;
+    if (changed('phase', S.phase)) {
       el.ring.setAttribute('class', p.ring);
       el.phase.setAttribute('class', 'rounded-full px-2.5 py-0.5 text-[11px] font-semibold ' + p.badge);
       el.phase.textContent = p.label;
       el.pillDot.setAttribute('class', 'h-2 w-2 rounded-full ' + p.dot);
     }
 
-    // Everything below is only drawn on the card; a minimized pill is done.
-    if (surface !== 'card') return;
-    const p = PHASES[S.phase];
+    // A minimized pill only shows the time.
+    if (surface === 'pill') {
+      if (changed('time', timeStr)) el.pillTime.textContent = timeStr;
+      return;
+    }
+    if (changed('time', timeStr)) el.time.textContent = timeStr;
 
     const roundsText = 'Round ' + S.round + '/' + settings.rounds;
-    if (roundsText !== lastRoundsText) {
-      lastRoundsText = roundsText;
-      el.rounds.textContent = roundsText;
-    }
+    if (changed('rounds', roundsText)) el.rounds.textContent = roundsText;
 
     const off = Math.round(RING_LEN * (1 - (S.duration ? S.remaining / S.duration : 0)) * 2) / 2;
-    if (off !== lastOffset) {
-      lastOffset = off;
-      el.ring.setAttribute('stroke-dashoffset', off.toFixed(1));
-    }
+    if (changed('ring', off)) el.ring.setAttribute('stroke-dashoffset', off.toFixed(1));
 
     const stateText = S.running ? (S.phase === 'focus' ? 'Focusing…' : 'Resting…') : (S.remaining === S.duration ? 'Ready' : 'Paused');
-    if (stateText !== lastStateText) {
-      lastStateText = stateText;
-      el.state.textContent = stateText;
-    }
+    if (changed('state', stateText)) el.state.textContent = stateText;
 
-    const playKey = S.phase + '|' + S.running;
-    if (playKey !== lastPlayKey) {
-      lastPlayKey = playKey;
-      el.play.innerHTML = S.running ? ICONS.pause : ICONS.play;
+    if (changed('play', S.phase + '|' + S.running)) {
+      setHTML(el.play, S.running ? ICONS.pause : ICONS.play);
       el.play.setAttribute('class', 'flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-105 ' + p.play);
     }
 
-    // Compare the underlying numbers so the string is only built on change.
     const d = stats[todayKey()];
     const focus = d ? d.focus : 0, rounds = d ? d.rounds : 0;
-    if (focus !== lastFooterFocus || rounds !== lastFooterRounds) {
-      lastFooterFocus = focus;
-      lastFooterRounds = rounds;
-      el.today.textContent = 'Today: ' + fmtHuman(focus) + ' focused · ' + rounds + ' rounds';
-    }
+    if (changed('today', focus + '|' + rounds)) el.today.textContent = 'Today: ' + fmtHuman(focus) + ' focused · ' + rounds + ' rounds';
   }
 
   /* ---- Tab title ----
-   * `writtenTitle` records the exact string we last wrote. MutationObserver
-   * callbacks are microtasks (delivered after the current stack unwinds), so
-   * a boolean "currently writing" flag cannot work — comparing the live title
-   * against writtenTitle synchronously is what prevents our own write from
-   * being mistaken for a site title change and reappended forever. */
-  let origTitle = document.title;
+   * `writtenTitle` is the title exactly as the browser reports it after our
+   * last write. Anything else in document.title is the site's own title.
+   *
+   * It is read back rather than remembered because the document.title getter
+   * collapses whitespace: a task like "a  b" would otherwise never compare
+   * equal, be mistaken for a site change and reappended forever (the
+   * MutationObserver below would spin and freeze the page). */
+  let origTitle = '';
   let writtenTitle = null;
 
   function renderTitle(timeStr) {
     if (!isLeader) return; // only the leader owns the tab title
+    const live = document.title;
+    if (live !== writtenTitle) origTitle = live; // the site set (or changed) its own title
     if (!settings.titleTimer) { restoreTitle(); return; }
     const p = PHASES[S.phase];
-    const task = (S.task || '').trim();
+    const task = S.task.replace(/\s+/g, ' ').trim();
     const shown = task.length > 40 ? task.slice(0, 39) + '…' : task; // keep the tab title readable
     const t = p.icon + ' ' + timeStr + ' ' + p.label + (shown ? ' · ' + shown : '') + (origTitle ? ' — ' + origTitle : '');
-    if (document.title !== t) { writtenTitle = t; document.title = t; }
+    if (live !== t) document.title = t;
+    writtenTitle = document.title;
   }
 
   function restoreTitle() {
@@ -716,57 +779,47 @@
     writtenTitle = null;
   }
 
-  // Keep origTitle in sync when the site (or an SPA) changes its own title.
-  // Our writes are recognised because they equal writtenTitle, so the
-  // observer never reacts to them — no feedback loop. Registered only once
-  // this tab leads (non-leader tabs never touch the title).
+  // Re-render when the site (or an SPA) changes its title. Our own writes
+  // read back equal to writtenTitle, so the observer ignores them — no
+  // feedback loop. Watching <head> also survives a replaced <title> element.
   function watchSiteTitle() {
-    const titleEl = document.querySelector('title');
-    if (!titleEl) return;
+    const target = document.head || document.querySelector('title');
+    if (!target) return;
     new MutationObserver(() => {
-      if (document.title === writtenTitle || document.title === origTitle) return;
-      origTitle = document.title;
-      renderTitle(fmtClock(S.remaining));
-    }).observe(titleEl, { childList: true, characterData: true, subtree: true });
+      if (isLeader && document.title !== writtenTitle) renderTitle(fmtClock(S.remaining));
+    }).observe(target, { childList: true, characterData: true, subtree: true });
   }
 
   /* ---- Settings view ---- */
   function syncSettingsView() {
-    if (!el) return;
+    if (!built) return;
     for (const [key] of SETTING_ROWS) {
       const input = $('#pw-set-' + key);
       // Never clobber what the user is currently typing into.
-      if (input && input !== shadow.activeElement) input.value = settings[key];
+      if (input !== shadow.activeElement) input.value = settings[key];
     }
-    for (const [key] of TOGGLES) {
-      const t = $('#pw-tgl-' + key);
-      if (t) t.checked = !!settings[key];
-    }
+    for (const [key] of TOGGLES) $('#pw-tgl-' + key).checked = settings[key];
   }
 
-  // Single funnel for every settings change — typed fields, +/- steppers and
-  // the toggle switches all land here, so behaviour can't diverge.
-  function applySetting(key, value) {
-    settings[key] = value;
+  // Single funnel for every settings change — typed fields, +/- steppers,
+  // toggle switches and "reset to defaults" all land here.
+  function applySettings(patch) {
+    Object.assign(settings, patch);
     // Rounds can shrink below the round already in flight; keep the readout
     // coherent ("Round 1/1", never "Round 5/3").
-    if (key === 'rounds' && S.round > value) S.round = value;
-    saveSettings();
-    syncSettingsView();
+    S.round = Math.min(S.round, settings.rounds);
     // A phase that hasn't started yet adopts a new duration straight away.
-    if (key !== 'rounds' && !S.running && S.remaining === S.duration) {
-      S.duration = durationFor(S.phase);
-      S.remaining = S.duration;
-      saveState();
-    }
+    if (!S.running && S.remaining === S.duration) S.duration = S.remaining = durationFor(S.phase);
+    saveSettings();
+    saveState();
+    syncSettingsView();
     render();
-    if (key === 'titleTimer') renderTitle(fmtClock(S.remaining));
-    if (key === 'sound' && value) chime('focusDone'); // audible preview
   }
 
   /* ---- Stats view ---- */
   function renderStats() {
-    const d = stats[todayKey()] || { focus: 0, rounds: 0, tasks: {} };
+    const today = todayKey();
+    const d = stats[today] || { focus: 0, rounds: 0, tasks: {} };
     el.statFocus.textContent = fmtHuman(d.focus);
     el.statRounds.textContent = d.rounds;
 
@@ -776,34 +829,34 @@
       const dt = new Date();
       dt.setDate(dt.getDate() - i);
       const k = dkey(dt);
-      days.push({ key: k, label: 'SMTWTFS'[dt.getDay()], val: stats[k] ? stats[k].focus : 0 });
+      days.push({ today: k === today, label: 'SMTWTFS'[dt.getDay()], val: stats[k] ? stats[k].focus : 0 });
     }
     const max = Math.max(60, ...days.map(x => x.val));
-    el.chart.innerHTML = days.map(x => {
+    setHTML(el.chart, days.map(x => {
       const h = Math.max(2, Math.round((x.val / max) * 56));
-      const isToday = x.key === todayKey();
       return '<div class="flex h-full flex-1 flex-col items-center justify-end gap-1">' +
-        '<div class="w-full rounded-t ' + (isToday ? 'bg-rose-500' : 'bg-slate-600') + '" style="height:' + h + 'px" title="' + fmtHuman(x.val) + '"></div>' +
-        '<div class="text-[9px] ' + (isToday ? 'font-bold text-slate-300' : 'text-slate-500') + '">' + x.label + '</div>' +
+        '<div class="w-full rounded-t ' + (x.today ? 'bg-rose-500' : 'bg-slate-600') + '" style="height:' + h + 'px" title="' + fmtHuman(x.val) + '"></div>' +
+        '<div class="text-[9px] ' + (x.today ? 'font-bold text-slate-300' : 'text-slate-500') + '">' + x.label + '</div>' +
       '</div>';
-    }).join('');
+    }).join(''));
 
     el.weekTotal.textContent = 'This week: ' + fmtHuman(days.reduce((a, x) => a + x.val, 0));
 
     // Tasks today
-    const entries = Object.entries(d.tasks || {}).sort((a, b) => b[1] - a[1]);
-    el.tasks.innerHTML = entries.length
+    const entries = Object.entries(d.tasks).sort((a, b) => b[1] - a[1]);
+    setHTML(el.tasks, entries.length
       ? entries.slice(0, 20).map(([name, sec]) =>
           '<div class="flex items-center justify-between rounded-lg bg-slate-800/70 px-2.5 py-1.5">' +
             '<span class="truncate text-[12px] text-slate-300">' + esc(name) + '</span>' +
             '<span class="ml-2 shrink-0 text-[12px] font-semibold tabular-nums text-slate-100">' + fmtHuman(sec) + '</span>' +
           '</div>'
         ).join('')
-      : '<div class="rounded-lg bg-slate-800/40 px-2.5 py-2 text-center text-[12px] text-slate-500">No focus time logged yet today.</div>';
+      : '<div class="rounded-lg bg-slate-800/40 px-2.5 py-2 text-center text-[12px] text-slate-500">No focus time logged yet today.</div>');
   }
 
   /* ---- View switching ---- */
   function showView(name) {
+    if (!built) return;
     el.viewTimer.classList.toggle('hidden', name !== 'timer');
     el.viewSettings.classList.toggle('hidden', name !== 'settings');
     el.viewStats.classList.toggle('hidden', name !== 'stats');
@@ -813,95 +866,67 @@
 
   // The drawer tab is position:fixed (viewport-relative) inside the shadow root,
   // so it stays docked at the bottom-left even when the widget host is dragged
-  // elsewhere — and stays visible while the widget itself is hidden.
+  // elsewhere — and stays visible while the widget itself is hidden. It follows
+  // the leader, so there's always a handle in whichever tab you last focused.
   function applyVisibility() {
     if (!built) return;
-    const showCard = isLeader && !ui.hidden && ui.mode === 'card';
-    const showPill = isLeader && !ui.hidden && ui.mode === 'pill';
-    el.card.classList.toggle('hidden', !showCard);
-    el.pill.classList.toggle('hidden', !showPill);
-    el.pill.classList.toggle('flex', showPill);
-    // The drawer tab follows the leader too — it appears in whichever tab you
-    // last focused, so there's always a handle to open the widget.
+    const surface = isLeader && !ui.hidden ? ui.mode : 'none';
+    el.card.classList.toggle('hidden', surface !== 'card');
+    el.pill.classList.toggle('hidden', surface !== 'pill');
+    el.pill.classList.toggle('flex', surface === 'pill');
     el.tab.classList.toggle('hidden', !isLeader);
     el.tab.classList.toggle('flex', isLeader);
-    el.tabIcon.innerHTML = ui.hidden ? ICONS.chevUp : ICONS.chevDown;
+    setHTML(el.tabIcon, ui.hidden ? ICONS.chevUp : ICONS.chevDown);
     el.tab.setAttribute('title', ui.hidden ? 'Show Pomodoro' : 'Hide Pomodoro');
-    // The visible surface just changed, so the per-surface render caches are
-    // stale; refresh them and repaint in one go for callers.
-    resetRenderCaches();
+    if (isLeader) place(ui.pos); // the surface (and so its size) may have changed
+    // The visible surface just changed, so the render cache is stale.
+    painted = {};
     render();
   }
 
-  function setMode(mode) {
-    ui.mode = mode;
+  function setUi(patch) {
+    Object.assign(ui, patch);
     saveUi();
     applyVisibility();
   }
-
-  function setHidden(hidden) {
-    ui.hidden = hidden;
-    saveUi();
-    applyVisibility();
-  }
-
-  function toggleHidden() { setHidden(!ui.hidden); }
 
   /* ------------------------------------------------------------------ *
    * Cross-tab leadership — the timer runs in ONE tab only
    *
    * Storage is shared across tabs, so the tab you last focused "claims"
-   * leadership by writing its id. Because all countdown math is based on
-   * absolute timestamps (endsAt vs Date.now()), the new leader can
-   * reconstruct the exact timer state from storage at handoff — no tab
-   * needs to keep a live count, and non-leader tabs hold zero timers.
+   * leadership by writing its id. Because all countdown and focus math is
+   * based on absolute timestamps, the new leader reconstructs the exact
+   * state from storage at handoff; the old leader just stops — it writes
+   * nothing, so a late write from it can never clobber the new leader.
    * ------------------------------------------------------------------ */
   const MY_ID = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
-  const LEADER_KEY = 'pomodoro.leader';
   let isLeader = false;
 
   function reloadSharedState() {
-    settings = Object.assign({}, DEFAULT_SETTINGS, store.get('pomodoro.settings', {}));
-    stats = store.get('pomodoro.stats', {});
-    Object.assign(ui, { mode: 'card', hidden: false, pos: null }, store.get('pomodoro.ui', {}));
-    const saved = store.get('pomodoro.state', null);
-    S = (saved && PHASES[saved.phase] && typeof saved.remaining === 'number')
-      ? Object.assign(freshState(), saved)
-      : freshState();
-    // Fast-forward through any phases that expired while no leader was around.
-    if (S.running) {
-      let guard = 0;
-      while (S.running && S.endsAt <= Date.now() && guard++ < 12) advancePhase(false);
-      if (guard >= 12) { S.running = false; S.remaining = S.duration; }
-      if (S.running) S.lastTick = Date.now();
-      saveState();
-    }
+    settings = loadSettings(store.get(KEYS.settings));
+    stats = loadStats(store.get(KEYS.stats));
+    ui = loadUi(store.get(KEYS.ui));
+    S = loadState(store.get(KEYS.state));
+    // A phase that ran out while no tab was leading completes silently (it
+    // was not witnessed); the next one starts from now if auto-start is on.
+    if (S.running && S.endsAt <= Date.now()) advancePhase(true, false);
   }
 
   function becomeLeader() {
     if (isLeader) return;
     isLeader = true;
-    // Re-read the site's own title every time we take over, so a tab that
-    // yielded and is claiming again never inherits a stale reference.
-    origTitle = document.title;
-    writtenTitle = null;
     reloadSharedState();
-    if (!built) buildUI();
-    el.task.value = S.task || '';
-    syncSettingsView();
-    applyVisibility(); // toggles the surfaces, then repaints
-    if (S.running) scheduleTick();
-    if (settings.notify && typeof GM_notification === 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      // Pre-ask so the first completion isn't silent (browser fallback only).
-      Notification.requestPermission().catch(() => {});
+    buildUI();
+    if (built) {
+      el.task.value = S.task;
+      syncSettingsView();
+      applyVisibility(); // toggles the surfaces, positions, then repaints
     }
+    scheduleTick();
   }
 
   function yieldLeadership() {
     if (!isLeader) return;
-    // Leave the freshest possible state behind for the next leader.
-    if (S.running) flushFocus();
-    saveState();
     isLeader = false;
     stopTicker();
     restoreTitle(); // hand the tab title back
@@ -909,56 +934,34 @@
   }
 
   function checkLeadership() {
-    const rec = store.get(LEADER_KEY, null);
-    if (rec && rec.id === MY_ID) becomeLeader();
+    const rec = store.get(KEYS.leader);
+    if (isObj(rec) && rec.id === MY_ID) becomeLeader();
     else yieldLeadership();
   }
 
-  let lastClaimTs = 0;
   function claimLeadership() {
-    const now = Date.now();
-    // Already leading and recently confirmed — the common case for the
-    // repeated focus events — so skip both the storage read and the write.
-    if (isLeader && now - lastClaimTs < 5000) return;
-    const rec = store.get(LEADER_KEY, null);
-    if (!rec || rec.id !== MY_ID || now - rec.ts > 5000) {
-      store.set(LEADER_KEY, { id: MY_ID, ts: now });
-    }
-    lastClaimTs = now;
+    const rec = store.get(KEYS.leader);
+    if (!isObj(rec) || rec.id !== MY_ID) store.set(KEYS.leader, { id: MY_ID, ts: Date.now() });
     becomeLeader();
   }
 
   function ensureLeader() { if (!isLeader) claimLeadership(); }
 
-  // Cross-tab change propagation — GM listeners, or the localStorage
-  // 'storage' event as fallback (fires in every tab except the writer).
+  // Cross-tab handoff — GM listeners, or the localStorage 'storage' event as
+  // fallback (fires in every tab except the writer).
   if (typeof GM_addValueChangeListener !== 'undefined') {
     try {
-      GM_addValueChangeListener(LEADER_KEY, (k, o, v, remote) => { if (remote) checkLeadership(); });
-      GM_addValueChangeListener('pomodoro.ui', (k, o, v, remote) => {
-        if (!remote) return;
-        try { Object.assign(ui, JSON.parse(v)); } catch (e) {}
-        applyVisibility();
-      });
+      GM_addValueChangeListener(KEYS.leader, (k, o, v, remote) => { if (remote) checkLeadership(); });
     } catch (e) { /* older managers */ }
   } else {
-    window.addEventListener('storage', e => {
-      if (e.key === LEADER_KEY) checkLeadership();
-      else if (e.key === 'pomodoro.ui') {
-        try { Object.assign(ui, JSON.parse(e.newValue)); } catch (err) {}
-        applyVisibility();
-      }
-    });
+    window.addEventListener('storage', e => { if (e.key === KEYS.leader) checkLeadership(); });
   }
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      claimLeadership(); // cheap no-op when this tab already leads
-      if (isLeader) { resetRenderCaches(); render(); scheduleTick(); }
-    } else {
-      // Backgrounded: stop the per-second repaint and sleep to the phase end.
-      scheduleTick();
-    }
+    if (!document.hidden) claimLeadership();
+    // Visible: repaint what was skipped and resume per-second wakes.
+    // Hidden: drop to a single wake at the phase end.
+    if (isLeader) { render(); scheduleTick(); }
   });
   window.addEventListener('focus', claimLeadership);
 
@@ -978,21 +981,17 @@
     // conversation), YouTube (play/pause) or GitHub. Stopping propagation at
     // the shadow root keeps plain typing inside; genuine modifier combos
     // (copy/paste, undo, our Alt+Shift+T hotkey) are left to propagate.
-    const shieldKeys = e => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      e.stopPropagation();
-    };
+    const shieldKeys = e => { if (!e.ctrlKey && !e.metaKey && !e.altKey) e.stopPropagation(); };
     for (const type of ['keydown', 'keypress', 'keyup']) shadow.addEventListener(type, shieldKeys);
 
     shadow.addEventListener('click', e => {
-      // Unlock audio on first interaction (autoplay policies).
-      if (actx && actx.state === 'suspended') actx.resume();
+      if (settings.sound) audio(); // unlock audio inside a user gesture (autoplay policies)
 
       const stepBtn = e.target.closest('[data-step]');
       if (stepBtn) {
         const [key, delta] = stepBtn.getAttribute('data-step').split(':');
         const [lo, hi] = RANGES[key];
-        applySetting(key, clamp(settings[key] + Number(delta), lo, hi));
+        applySettings({ [key]: clamp(settings[key] + Number(delta), lo, hi) });
         return;
       }
 
@@ -1002,11 +1001,12 @@
         case 'toggle': toggle(); break;
         case 'reset': reset(); break;
         case 'skip': skip(); break;
-        case 'min': setMode('pill'); break;
-        case 'hide': setHidden(true); break;
+        case 'min': setUi({ mode: 'pill' }); break;
+        case 'hide': setUi({ hidden: true }); break;
         case 'settings': showView('settings'); break;
         case 'stats': showView('stats'); break;
         case 'back': showView('timer'); break;
+        case 'defaults': applySettings(DEFAULT_SETTINGS); break;
         case 'clearstats':
           if (confirm("Clear today's stats?")) {
             delete stats[todayKey()];
@@ -1018,10 +1018,10 @@
       }
     });
 
-    // Task input — flush current focus time to the previous task before switching.
+    // Task input — credit focus time to the previous task before switching.
     el.task.addEventListener('change', () => {
       flushFocus();
-      S.task = el.task.value;
+      S.task = el.task.value.slice(0, TASK_MAX);
       saveState();
       render();
     });
@@ -1029,59 +1029,43 @@
     // Toggle switches
     for (const [key] of TOGGLES) {
       const t = $('#pw-tgl-' + key);
-      t.addEventListener('change', () => applySetting(key, t.checked));
+      t.addEventListener('change', () => {
+        applySettings({ [key]: t.checked });
+        if (key === 'sound' && t.checked) chime('focusDone'); // audible preview
+      });
     }
 
     // Duration fields — typing commits on Enter or blur.
     for (const [key] of SETTING_ROWS) {
       const input = $('#pw-set-' + key);
-      const commit = () => {
+      input.addEventListener('change', () => {
         const [lo, hi] = RANGES[key];
         const typed = Math.round(Number(input.value));
-        const v = clamp(Number.isFinite(typed) && typed > 0 ? typed : settings[key], lo, hi);
+        const v = clamp(finite(typed) && typed > 0 ? typed : settings[key], lo, hi);
         input.value = v; // show the clamped value back to the user
-        if (v !== settings[key]) applySetting(key, v);
-      };
-      input.addEventListener('change', commit);
-      input.addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-        else if (e.key === 'Escape') input.blur();
+        if (v !== settings[key]) applySettings({ [key]: v });
       });
     }
 
-    // Reset every setting back to the shipped defaults.
-    $('#pw-reset-settings').addEventListener('click', () => {
-      Object.assign(settings, DEFAULT_SETTINGS);
-      if (S.round > settings.rounds) S.round = settings.rounds;
-      saveSettings();
-      syncSettingsView();
-      if (!S.running && S.remaining === S.duration) {
-        S.duration = durationFor(S.phase);
-        S.remaining = S.duration;
-        saveState();
-      }
-      render();
-      renderTitle(fmtClock(S.remaining));
-    });
-
-    // Enter in the task field commits it (blur then fires `change`).
-    el.task.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); el.task.blur(); }
-    });
-
-    // Escape backs out of a panel.
+    // Enter commits a field (blur then fires `change`); Escape blurs a
+    // field, or backs out of a panel.
     shadow.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && el.viewTimer.classList.contains('hidden')) showView('timer');
+      const field = e.target.tagName === 'INPUT' && e.target.type !== 'checkbox' ? e.target : null;
+      if (e.key === 'Enter' && field) { e.preventDefault(); field.blur(); }
+      else if (e.key === 'Escape') {
+        if (field) field.blur();
+        if (el.viewTimer.classList.contains('hidden')) showView('timer');
+      }
     });
 
     // Pill click → expand (ignored right after a drag)
     el.pill.addEventListener('click', () => {
       if (pillDragged) { pillDragged = false; return; }
-      setMode('card');
+      setUi({ mode: 'card' });
     });
 
     // Drawer tab → show/hide the widget
-    el.tab.addEventListener('click', toggleHidden);
+    el.tab.addEventListener('click', () => setUi({ hidden: !ui.hidden }));
 
     makeDraggable($('#pw-header'), false);
     makeDraggable(el.pill, true);
@@ -1099,72 +1083,60 @@
       let moved = false;
 
       const onMove = ev => {
-        const w = rect.width, h = rect.height;
-        const left = clamp(ev.clientX - offX, 4, window.innerWidth - w - 4);
-        const top = clamp(ev.clientY - offY, 4, window.innerHeight - h - 4);
         if (Math.abs(ev.clientX - e.clientX) + Math.abs(ev.clientY - e.clientY) > 6) moved = true;
-        host.style.setProperty('left', left + 'px', 'important');
-        host.style.setProperty('top', top + 'px', 'important');
-        host.style.setProperty('right', 'auto', 'important');
-        host.style.setProperty('bottom', 'auto', 'important');
+        place({ left: ev.clientX - offX, top: ev.clientY - offY }, rect);
       };
-      const onUp = ev => {
+      const onUp = () => {
         window.removeEventListener('pointermove', onMove, true);
         window.removeEventListener('pointerup', onUp, true);
-        if (moved) {
-          const r = host.getBoundingClientRect();
-          ui.pos = { left: Math.round(r.left), top: Math.round(r.top) };
-          saveUi();
-          if (isPill) pillDragged = true;
-        }
+        window.removeEventListener('pointercancel', onUp, true);
+        if (!moved) return;
+        const r = host.getBoundingClientRect();
+        ui.pos = { left: Math.round(r.left), top: Math.round(r.top) };
+        saveUi();
+        if (isPill) pillDragged = true;
       };
       window.addEventListener('pointermove', onMove, true);
       window.addEventListener('pointerup', onUp, true);
+      window.addEventListener('pointercancel', onUp, true);
     });
   }
 
   /* ---- Hotkey & menu commands ---- */
-  // Alt+Shift+T — avoids the browser's private-window shortcut (Ctrl/Alt+Shift+P).
-  window.addEventListener('keydown', e => {
-    if (e.altKey && e.shiftKey && e.code === 'KeyT') {
-      e.preventDefault();
-      claimLeadership(); // the user is here — this tab should run the widget
-      toggleHidden();
-    }
-  });
-
-  // Open a panel from the Tampermonkey menu — this tab takes over and un-hides.
-  function openPanel(view) {
+  // Opening anything from outside the widget means the user is in this tab,
+  // so it takes over first.
+  function showWidget(view) {
     claimLeadership();
-    setHidden(false);
-    setMode('card');
+    setUi({ hidden: false, mode: 'card' });
     showView(view);
   }
 
+  function toggleWidget() {
+    claimLeadership();
+    setUi({ hidden: !ui.hidden });
+  }
+
+  // Alt+Shift+T — avoids the browser's private-window shortcut (Ctrl/Alt+Shift+P).
+  window.addEventListener('keydown', e => {
+    if (e.altKey && e.shiftKey && e.code === 'KeyT' && !e.repeat) {
+      e.preventDefault();
+      toggleWidget();
+    }
+  });
+
   if (typeof GM_registerMenuCommand !== 'undefined') {
     try {
-      GM_registerMenuCommand('▶ / ⏸  Start / Pause', () => { ensureLeader(); toggle(); });
-      GM_registerMenuCommand('👁  Show / Hide widget  (Alt+Shift+T)', () => { claimLeadership(); toggleHidden(); });
-      GM_registerMenuCommand('⏭  Skip phase', () => { ensureLeader(); skip(); });
-      GM_registerMenuCommand('📊  Open stats', () => openPanel('stats'));
-      GM_registerMenuCommand('⚙  Open settings', () => openPanel('settings'));
+      GM_registerMenuCommand('▶ / ⏸  Start / Pause', toggle);
+      GM_registerMenuCommand('👁  Show / Hide widget  (Alt+Shift+T)', toggleWidget);
+      GM_registerMenuCommand('⏭  Skip phase', skip);
+      GM_registerMenuCommand('📊  Open stats', () => showWidget('stats'));
+      GM_registerMenuCommand('⚙  Open settings', () => showWidget('settings'));
     } catch (e) { /* older managers */ }
   }
 
-  // Keep a dragged widget reachable when the window shrinks.
-  window.addEventListener('resize', () => {
-    if (!built || !ui.pos) return;
-    const r = host.getBoundingClientRect();
-    const left = clamp(ui.pos.left, 4, Math.max(4, window.innerWidth - r.width - 4));
-    const top = clamp(ui.pos.top, 4, Math.max(4, window.innerHeight - r.height - 4));
-    if (left === ui.pos.left && top === ui.pos.top) return;
-    ui.pos = { left, top };
-    saveUi();
-    host.style.setProperty('left', left + 'px', 'important');
-    host.style.setProperty('top', top + 'px', 'important');
-  });
-
-  window.addEventListener('beforeunload', () => { if (isLeader) { flushFocus(); saveState(); } });
+  // Keep a dragged widget reachable when the window shrinks (the saved
+  // position is kept, so it returns there when the window grows again).
+  window.addEventListener('resize', () => { if (isLeader && built && ui.pos) place(ui.pos); });
 
   /* ------------------------------------------------------------------ *
    * Startup
@@ -1173,6 +1145,8 @@
   // widget is created lazily by whichever tab becomes the leader, and even
   // then only in an idle slot, so it never competes with the page's own load
   // work. A background-loaded tab stays completely inert until it is focused.
+  // There is deliberately no unload handler: saved state is always
+  // self-consistent, and unload listeners would disable the back/forward cache.
   const idle = window.requestIdleCallback
     ? cb => window.requestIdleCallback(cb, { timeout: 300 })
     : cb => setTimeout(cb, 0);

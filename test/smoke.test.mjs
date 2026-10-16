@@ -49,7 +49,7 @@ function setVisibility(w, state) {
 }
 
 /* ---------------- boot one window ---------------- */
-async function boot({ hidden = false } = {}) {
+async function boot({ hidden = false, trustedTypes = false } = {}) {
   const dom = new JSDOM(
     '<!doctype html><html><head><title>Example Page</title></head><body><h1>site</h1></body></html>',
     { url: 'https://example.com/', runScripts: 'outside-only', pretendToBeVisual: true }
@@ -65,6 +65,22 @@ async function boot({ hidden = false } = {}) {
   w.GM_notification = n => notifications.push(n);
   w.GM_registerMenuCommand = () => {};
   w.GM_addValueChangeListener = (key, cb) => { listeners.push({ win: w, key, cb }); return listeners.length; };
+
+  if (trustedTypes) {
+    // Emulate `require-trusted-types-for 'script'`: innerHTML rejects plain strings.
+    const desc = Object.getOwnPropertyDescriptor(w.Element.prototype, 'innerHTML');
+    Object.defineProperty(w.Element.prototype, 'innerHTML', {
+      configurable: true,
+      get: desc.get,
+      set(v) {
+        if (!(v && v.__trusted)) throw new w.TypeError("This document requires 'TrustedHTML' assignment.");
+        desc.set.call(this, v.html);
+      },
+    });
+    w.trustedTypes = {
+      createPolicy: (name, rules) => ({ createHTML: s => ({ __trusted: true, html: rules.createHTML(s) }) }),
+    };
+  }
 
   w.eval(SCRIPT);
   await sleep(40); // the leadership claim is deferred to an idle slot
@@ -258,10 +274,107 @@ const main = async () => {
   A.$('#pw-set-focusMin').dispatchEvent(new A.w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true }));
   check('the shield does not block our own key handling', !A.$('#pw-view-timer').classList.contains('hidden'));
 
+  section('Focus accounting (exact, capped, handoff-safe)');
+  // Day keys come from the real clock (new Date()), so "today" is the newest key.
+  const todayStats = () => {
+    const s = JSON.parse(store.get('pomodoro.stats') || '{}');
+    return s[Object.keys(s).sort().pop()] || { focus: 0, rounds: 0, tasks: {} };
+  };
+  const setTask = name => { const t = A.$('#pw-task'); t.value = name; t.dispatchEvent(new A.w.Event('change')); };
+
+  A.$('[data-act="reset"]').click();
+  let before = todayStats();
+  A.$('#pw-play').click();
+  fakeNow += 30000;
+  A.$('#pw-play').click(); // pause before any wakeup has accrued the time
+  check('pausing credits the time since the last wakeup', todayStats().focus - before.focus === 30, todayStats().focus - before.focus);
+
+  before = todayStats();
+  A.$('[data-act="skip"]').click();
+  check('skipping moves on to the break', A.$('#pw-phase').textContent === 'Short Break', A.$('#pw-phase').textContent);
+  check('a skipped focus round is not counted as completed', todayStats().rounds === before.rounds, JSON.stringify(todayStats()));
+  A.$('[data-act="reset"]').click();
+
+  before = todayStats();
+  let n0 = A.notifications.length;
+  A.$('#pw-play').click();
+  fakeNow += 5 * 3600000; // e.g. the laptop slept mid-round
+  await until(() => A.$('#pw-phase').textContent === 'Short Break');
+  check('a long sleep credits at most the phase length', todayStats().focus - before.focus === 25 * 60, todayStats().focus - before.focus);
+  check('...and exactly one completed round', todayStats().rounds - before.rounds === 1, todayStats().rounds - before.rounds);
+  check('the late completion is announced once', A.notifications.length - n0 === 1, A.notifications.length - n0);
+  A.$('[data-act="reset"]').click();
+
+  before = todayStats();
+  A.$('#pw-play').click();
+  fakeNow += 40000;
+  B.w.dispatchEvent(new B.w.Event('focus'));
+  await until(() => !B.$('#pw-card').classList.contains('hidden'));
+  check('the focused tab takes over a running timer', B.$('#pw-state').textContent === 'Focusing…', B.$('#pw-state').textContent);
+  B.$('#pw-play').click();
+  check('focus time survives a tab handoff, counted once', todayStats().focus - before.focus === 40, todayStats().focus - before.focus);
+  check('the new leader shows the exact remaining time', B.$('#pw-time').textContent === '24:20', B.$('#pw-time').textContent);
+  A.w.dispatchEvent(new A.w.Event('focus'));
+  await until(() => !A.$('#pw-card').classList.contains('hidden'));
+  A.$('[data-act="reset"]').click();
+
+  section('Tab title survives whitespace normalisation');
+  // document.title's getter collapses runs of whitespace, so a task with double
+  // spaces must not make our own write look like a site title change.
+  setTask('Write   the  report');
+  await sleep(50);
+  const t3 = A.w.document.title;
+  check('a task with repeated spaces does not snowball the title', occurrences(t3, ' — ') === 1 && t3.length < 90, JSON.stringify(t3.slice(0, 160)));
+
+  section('Task names cannot corrupt stats');
+  for (const name of ['constructor', '__proto__', 'toString']) {
+    setTask(name);
+    A.$('#pw-play').click();
+    fakeNow += 5000;
+    A.$('#pw-play').click();
+  }
+  setTask('');
+  A.$('[data-act="reset"]').click();
+  const tk = todayStats().tasks;
+  check('"constructor" / "toString" are tracked as plain numbers', tk.constructor === 5 && tk.toString === 5, JSON.stringify(tk));
+  check('"__proto__" is tracked as a plain number', Object.prototype.hasOwnProperty.call(tk, '__proto__') && tk['__proto__'] === 5, JSON.stringify(tk));
+
+  section('Position follows the leader');
+  store.set('pomodoro.ui', JSON.stringify({ mode: 'card', hidden: false, pos: { left: 100, top: 120 } }));
+  B.w.dispatchEvent(new B.w.Event('focus'));
+  await until(() => !B.$('#pw-card').classList.contains('hidden'));
+  const bHost = B.w.document.getElementById('pomodoro-focus-timer-host');
+  check('a reclaiming tab moves its widget to the saved position', bHost.style.left === '100px' && bHost.style.top === '120px', bHost.getAttribute('style'));
+
+  section('Corrupt / hostile storage is sanitised');
+  const dk = Object.keys(JSON.parse(store.get('pomodoro.stats'))).sort().pop();
+  store.set('pomodoro.settings', JSON.stringify({ focusMin: 'abc', shortMin: -3, rounds: 999, sound: 'yes' }));
+  store.set('pomodoro.ui', JSON.stringify({ mode: 'weird', hidden: 'no', pos: { left: 'x', top: 5 } }));
+  store.set('pomodoro.state', JSON.stringify({ phase: 'focus', round: 50, running: false, duration: 'NaN', remaining: null }));
+  store.set('pomodoro.stats', JSON.stringify({
+    [dk]: { focus: '<img src=x onerror=alert(1)>', rounds: 2, tasks: { '<b>t</b>': '<img src=x>', ok: 60 } },
+    'not-a-date': { focus: 1 },
+  }));
+  const E = await boot();
+  check('the widget still builds and shows', E.built && !E.$('#pw-card').classList.contains('hidden'));
+  check('an invalid duration falls back to the default', E.$('#pw-time').textContent === '25:00', E.$('#pw-time').textContent);
+  check('an out-of-range round count is clamped', E.$('#pw-rounds').textContent === 'Round 12/12', E.$('#pw-rounds').textContent);
+  E.$('[data-act="stats"]').click();
+  check('stored strings never become markup', !E.shadow.querySelector('img, b'));
+  check('no NaN / undefined anywhere in the widget', !/NaN|undefined/.test(E.shadow.textContent), E.shadow.textContent.match(/.{0,20}(NaN|undefined).{0,20}/));
+  check('valid task entries survive', E.$('#pw-tasks').textContent.includes('ok'), E.$('#pw-tasks').textContent);
+  E.$('#pw-reset-settings').click();
+
+  section('Trusted Types–enforcing pages (YouTube, Gmail, …)');
+  const T = await boot({ trustedTypes: true });
+  check('the widget builds under Trusted Types enforcement', T.built && !!T.$('#pw-card'));
+  check('icons render through the policy', !!T.$('#pw-play svg'));
+
   section('Structural guards for the idle/timer model');
   check('no polling timers anywhere (setInterval)', !SCRIPT.includes('setInterval'));
-  check('catch-up completions are silent', SCRIPT.includes('announce && !catchingUp'));
-  check('catch-up chains are capped', SCRIPT.includes('rapidSteps < 20'));
+  check('no unload/beforeunload listeners (they break the back/forward cache)', !/addEventListener\(\s*'(?:before)?unload'/.test(SCRIPT));
+  check('the stylesheet uses px, immune to the page root font-size', !/\d(?:\.\d+)?rem\b/.test(SCRIPT), (SCRIPT.match(/[\d.]+rem\b/g) || []).slice(0, 5).join(' '));
+  check('the host resets inherited page styles', SCRIPT.includes("'all', 'initial'"));
   check('UI is built lazily, not at startup', SCRIPT.includes('function buildUI()'));
   check('a hide action exists in the widget', SCRIPT.includes('data-act="hide"'));
   check('metadata declares an icon', SCRIPT.includes('// @icon'));

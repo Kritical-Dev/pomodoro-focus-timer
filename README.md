@@ -23,7 +23,7 @@ do not auto-update.
 - **Tab-title countdown** — optional, toggleable; restores the site's original title when off.
 - **Draggable & minimizable** — drag by the header to any corner (position persists), collapse to a tiny pill, or hide entirely.
 - **Drawer tab** — a small rectangular tab with an up arrow stays docked at the bottom-left of the viewport; click it to show/hide the widget (arrow flips down while the widget is open).
-- **Survives reloads** — a running timer fast-forwards through any phases that expired while the page was closed.
+- **Survives reloads, sleep and crashes** — a phase that ran out while no tab was open completes silently on return (the next one starts then, if auto-start is on). Focus time is pure timestamp arithmetic capped at the phase end, so a laptop that sleeps mid-round credits at most that round, a killed tab loses nothing, and a skipped focus round is not counted as completed.
 - **Single active instance** — the timer runs only in your most recently focused tab; the widget (and drawer tab) follows you across tabs. Handoff is seamless because all countdown math is timestamp-based: the newly active tab reconstructs the exact remaining time from `endsAt` instead of keeping a live count.
 - **Performance-friendly** — see [Performance model](#performance-model) below: non-leader tabs do essentially nothing, and the leader wakes once per second only while a visible timer is running.
 - **Private** — see [Privacy](#privacy): no network requests, no telemetry; all data stays in local Tampermonkey storage.
@@ -31,7 +31,7 @@ do not auto-update.
 - **Fast setup changes** — duration and round fields are typable *and* steppable (no clicking `+` sixty times), with a one-click "reset settings to defaults".
 - **Panel shortcuts** — `Escape` leaves the stats/settings panel, `Enter` commits the task field, and the drawer tab `▲`/`▼` reflects whether the widget is open.
 - **Accessible** — labelled controls, a polite `role="status"` announcement for phase changes, visible keyboard focus rings, and `prefers-reduced-motion` support.
-- **Robust** — clamps an off-screen position back into view when the window shrinks, and re-attaches itself if a single-page app replaces `document.body`.
+- **Robust** — clamps an off-screen position back into view when the window shrinks, re-attaches itself if a single-page app replaces `document.body`, works on Trusted Types–enforcing sites (YouTube, Gmail), is immune to sites that change the root font-size (the stylesheet is compiled to `px`) or set inherited styles on `body` (the host uses `all: initial`), and sanitises everything it reads back from storage.
 
 ## Controls
 
@@ -99,9 +99,10 @@ to 0.5 px, and footer statistics compare integers before building strings.
 
 **Misc.** No `backdrop-filter` (it forces backdrop readback and can cost real
 scroll performance) — the panels use a solid background instead. Focus time is
-flushed to storage at most every 15 s. A safety valve suppresses the chime and
-desktop notification for phases that complete back-to-back while catching up
-after the browser was frozen, and parks the timer after 20 such steps. The
+credited to stats at most every 15 s. There is no `unload`/`beforeunload`
+handler (those disable the back/forward cache on every site): saved state is
+always self-consistent, so there is nothing to write on the way out, and a tab
+that loses leadership simply stops without writing. The
 Tailwind config blocklists `container`/`ring`/`shadow`/`visible`, which would
 otherwise be emitted from bare identifiers in the script.
 
@@ -120,7 +121,7 @@ npm test        # smoke-test the built script in jsdom
 
 ### Tests
 
-The suite (`test/smoke.test.mjs`, 76 checks) boots real DOM windows in jsdom with a shared Tampermonkey-like store (including cross-window change dispatch) and a fake clock, so it covers timer math, phase transitions, stats crediting, tab-title handling, the drawer tab, settings editing and clamping, cross-tab leadership, keystroke isolation from page shortcuts, the lazy-build/idle-tab behaviour, and the privacy/update-metadata claims — without waiting for real minutes to pass.
+The suite (`test/smoke.test.mjs`, 98 checks) boots real DOM windows in jsdom with a shared Tampermonkey-like store (including cross-window change dispatch) and a fake clock, so it covers timer math, phase transitions, stats crediting, tab-title handling, the drawer tab, settings editing and clamping, cross-tab leadership and handoff accounting, focus crediting after sleep, corrupt-storage sanitising, Trusted Types enforcement, keystroke isolation from page shortcuts, the lazy-build/idle-tab behaviour, and the privacy/update-metadata claims — without waiting for real minutes to pass.
 
 Because a runaway mutation/render loop starves the event loop (timers never fire), such a failure can't be timed out from inside the same thread; `test/run.mjs` therefore runs the suite in a child process with a watchdog, so a freeze reports as a failure instead of hanging.
 
@@ -139,12 +140,15 @@ which is what makes that check reliable).
 
 - **Pages hang / don't load, and the title bar shows the countdown repeated many times** — fixed in v1.1.0. The cause was a tab-title feedback loop: `MutationObserver` callbacks are microtasks, so a "currently writing the title" boolean was already cleared by the time the observer fired, and the script mistook its own title write for a site change and reappended it forever. The fix compares the live title against the exact string last written (`writtenTitle`). Regression-tested in `test/smoke.test.mjs`.
 - **A particular letter won't type in the task box** — fixed in v1.3.2. Shadow DOM retargets keyboard events to the host element, so a page's "ignore shortcuts while typing" guard (`e.target.tagName === 'INPUT'`) never matched a field inside the widget. The site therefore treated your typing as its own single-key shortcut and called `preventDefault()`, swallowing that character — `k` is "previous conversation" in Gmail, "play/pause" in YouTube, and a GitHub shortcut, so it was the usual culprit. Plain keystrokes are now stopped at the shadow root, while modifier combos (copy/paste, `Alt+Shift+T`) still propagate. Regression-tested.
+- **A page froze after typing a task with double spaces** — fixed in v1.4.0. The `document.title` getter collapses whitespace, so the title read back never equalled the string written, the observer took it for a site change and reappended it forever. The script now records the title as read back after writing. Regression-tested.
+- **Widget is tiny or huge on some sites** — fixed in v1.4.0. Tailwind sizes are in `rem`, which follow the page's `<html>` font-size; the build now converts them to `px`.
+- **No widget on YouTube / Gmail** — fixed in v1.4.0. Those sites enforce Trusted Types, which rejected the widget's markup; it is now assigned through a Trusted Types policy.
 - **Widget or drawer tab missing in a tab** — expected unless that tab is the elected leader; switch to (or click) the tab and it claims the widget automatically. See the notes below.
 
 ## Notes / limitations
 
 - Timer state and settings are shared across all tabs via Tampermonkey storage; one tab (the last focused) is the elected "leader" that runs the engine, using `GM_addValueChangeListener` for instant handoff (`storage` events as fallback).
-- Focus time is persisted on a 15 s cadence (and on pause, phase change and page unload), so a hard crash or force-kill can lose at most the last ~15 seconds of unsaved focus time.
+- Focus time is derived from saved timestamps, so a hard crash or force-kill loses nothing: the next tab to lead credits the time up to the phase end.
 - If the browser is fully minimized for a long time, Chrome's intensive throttling may delay a completion chime by up to ~1 minute — the clock itself never drifts, since it's computed from timestamps. (This is inherent to userscripts; only a full extension with the `alarms` API can do better.)
 - Sites with a very strict Content-Security-Policy (no `unsafe-inline` in `style-src`) may block the widget's styles — rare, but possible.
 - Excluded from iframes via `@noframes` (and a top-frame check as a second guard).
