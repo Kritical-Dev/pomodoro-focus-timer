@@ -390,8 +390,6 @@ const ICONS = {
   plus: '<svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>',
   sub: '<svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14z"/></svg>',
   trash: '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
-  chevUp: '<svg viewBox="0 0 24 24"><path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>',
-  chevDown: '<svg viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>',
 };
 
 // A typable number field flanked by +/- steppers. The field is the single
@@ -443,8 +441,7 @@ function markup() {
           '<span class="pw-title">Pomodoro</span>' +
           '<button data-act="stats" title="Stats" aria-label="Stats" class="pw-iconbtn">' + ICONS.chart + '</button>' +
           '<button data-act="settings" title="Settings" aria-label="Settings" class="pw-iconbtn">' + ICONS.gear + '</button>' +
-          '<button data-act="min" title="Minimize to pill" aria-label="Minimize to pill" class="pw-iconbtn">' + ICONS.minus + '</button>' +
-          '<button data-act="hide" title="Hide (reopen from the drawer tab, bottom-left)" aria-label="Hide widget" class="pw-iconbtn">' + ICONS.chevDown + '</button>' +
+          '<button data-act="min" title="Collapse to the timer" aria-label="Collapse to the timer" class="pw-iconbtn">' + ICONS.minus + '</button>' +
         '</div>' +
 
         // Timer view
@@ -527,16 +524,10 @@ function markup() {
         '</div>' +
       '</div>' +
 
-      // Minimized pill
-      '<button id="pw-pill" class="hidden" title="Expand">' +
+      // Collapsed: just the timer. Clicking it opens the full widget.
+      '<button id="pw-pill" class="hidden" title="Open Pomodoro" aria-label="Open Pomodoro">' +
         '<span id="pw-pill-dot"></span>' +
         '<span id="pw-pill-time">25:00</span>' +
-      '</button>' +
-
-      // Drawer tab — fixed at the bottom-left of the viewport; toggles the widget.
-      '<button id="pw-tab" class="hidden" title="Show Pomodoro">' +
-        '<span id="pw-tab-icon">' + ICONS.chevUp + '</span>' +
-        '<span>Pomodoro</span>' +
       '</button>' +
     '</div>'
   );
@@ -585,7 +576,7 @@ function buildUI() {
     for (const id of ['wrap', 'card', 'pill', 'phase', 'rounds', 'dots', 'ring', 'time', 'state', 'task', 'tasklist',
       'play', 'today', 'notice', 'pill-time', 'view-timer', 'view-settings', 'view-stats', 'volume', 'hotkey',
       'exclude', 'excluded', 'clear', 'stat-focus', 'stat-rounds', 'goal', 'goal-bar', 'goal-text', 'chart',
-      'week-total', 'tasks', 'import-file', 'stats-msg', 'tab', 'tab-icon']) {
+      'week-total', 'tasks', 'import-file', 'stats-msg']) {
       el[id.replace(/-(.)/g, (m, c) => c.toUpperCase())] = $('#pw-' + id);
     }
     bindEvents();
@@ -928,18 +919,14 @@ function showView(name) {
   if (name === 'stats') { showStatsMsg(''); loadHistory(); renderStats(); }
 }
 
-// The drawer tab is position:fixed (viewport-relative) inside the shadow root,
-// so it stays docked at the bottom-left even when the widget host is dragged
-// elsewhere — and stays visible while the widget itself is hidden. It follows
-// the leader, so there's always a handle in whichever tab you last focused.
+// Three states: the full card, the collapsed timer pill (click it to open the
+// card), or nothing at all (hotkey / Tampermonkey menu). Only the leader
+// shows anything, so the widget follows whichever tab you last focused.
 function applyVisibility() {
   if (!built) return;
   const surface = isLeader && !ui.hidden ? ui.mode : 'none';
   el.card.classList.toggle('hidden', surface !== 'card');
   el.pill.classList.toggle('hidden', surface !== 'pill');
-  el.tab.classList.toggle('hidden', !isLeader);
-  setHTML(el.tabIcon, ui.hidden ? ICONS.chevUp : ICONS.chevDown);
-  el.tab.setAttribute('title', ui.hidden ? 'Show Pomodoro' : 'Hide Pomodoro');
   if (isLeader) place(ui.pos); // the surface (and so its size) may have changed
   // The visible surface just changed, so the render cache is stale.
   painted = {};
@@ -1114,7 +1101,6 @@ function bindEvents() {
       case 'skip': skip(); break;
       case 'extend': extend(); break;
       case 'min': setUi({ mode: 'pill' }); break;
-      case 'hide': setUi({ hidden: true }); break;
       case 'settings': showView('settings'); break;
       case 'stats': showView('stats'); break;
       case 'back': showView('timer'); break;
@@ -1206,14 +1192,11 @@ function bindEvents() {
     }
   });
 
-  // Pill click → expand (ignored right after a drag)
+  // Clicking the collapsed timer opens the card (ignored right after a drag)
   el.pill.addEventListener('click', () => {
     if (pillDragged) { pillDragged = false; return; }
     setUi({ mode: 'card' });
   });
-
-  // Drawer tab → show/hide the widget
-  el.tab.addEventListener('click', () => setUi({ hidden: !ui.hidden }));
 
   document.addEventListener('fullscreenchange', syncFullscreen);
 

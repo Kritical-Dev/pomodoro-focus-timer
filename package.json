@@ -1,6 +1,6 @@
 {
   "name": "pomodoro",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A modern, fully self-contained Pomodoro userscript that floats on every website and tracks how long you spend on tasks each day. No dependencies at runtime or build time; the UI lives in a Shadow DOM so page styles never leak in or out.",
   "main": "pomodoro.user.js",
   "repository": {

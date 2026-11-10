@@ -2,6 +2,12 @@
 
 All notable changes to the userscript. Versions follow [semantic versioning](https://semver.org/).
 
+## [2.1.0]
+
+### Changed
+- **The drawer tab at the bottom-left is gone**, along with the header's hide button. The widget now has two on-screen forms: the full card, and a small timer you get from `–` in the header; clicking the timer opens the card again.
+- Hiding the widget completely is still possible with the hotkey or the Tampermonkey menu. A widget that was hidden behind the old drawer tab reappears after updating.
+
 ## [2.0.0]
 
 ### Added

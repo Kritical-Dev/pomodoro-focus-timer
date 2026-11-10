@@ -28,8 +28,8 @@ do not auto-update.
 - **Accurate by construction** — focus time is timestamp arithmetic capped at the phase end: a laptop that sleeps mid-round credits at most that round, a crashed tab loses nothing, a round across midnight is split between the two days, and a skipped round is not counted as completed.
 
 **Widget**
-- **Draggable & minimizable** — drag by the header (position persists), collapse to a tiny pill, or hide entirely.
-- **Drawer tab** — a small tab docked at the bottom-left of the viewport shows/hides the widget.
+- **Collapses to just the timer** — `–` in the header shrinks the widget to a small countdown; click the timer to open it again. Either can be dragged anywhere (position persists).
+- **Hide completely** — the hotkey or the Tampermonkey menu removes it from the page altogether; the countdown stays in the tab title.
 - **Themes** — dark, light, or follow the system.
 - **Per-site exclusion** — "Hide on this site" in settings keeps a site clear; undo it from the Tampermonkey menu on that site, or from the list in settings anywhere else.
 - **Gets out of the way** — hidden while a page is fullscreen.
@@ -49,9 +49,9 @@ do not auto-update.
 |---|---|
 | Start / pause | Play button, or Tampermonkey menu |
 | Skip / reset / +5 min | Buttons in the widget |
-| Show / hide widget | Drawer tab (bottom-left), or the hotkey (default `Alt+Shift+T`) |
-| Collapse to pill | `–` in the header |
-| Hide to drawer only | `▾` in the header |
+| Collapse to just the timer | `–` in the header |
+| Open the widget | Click the timer |
+| Hide / show everything | The hotkey (default `Alt+Shift+T`), or Tampermonkey menu |
 | Open stats / settings | Header icons, or Tampermonkey menu |
 | Back to the timer | `Escape` |
 | Hide / show on this site | Settings, or Tampermonkey menu |
@@ -109,7 +109,7 @@ exact state from storage, and the old leader writes nothing on the way out.
 
 **Rendering is change-cached.** Every DOM write is guarded by a comparison, so
 in steady state a wakeup mutates nothing but the time. Only the visible surface
-is updated (a minimized pill skips all card work, a hidden widget skips
+is updated (the collapsed timer skips all card work, a hidden widget skips
 everything but the tab title).
 
 **Storage writes stay small.** Stats live in two values: a record for today
@@ -169,7 +169,8 @@ is stale, so remember to run `npm run build` before committing source changes.
 
 ## Troubleshooting
 
-- **Widget or drawer tab missing in a tab** — expected unless that tab is the elected leader; switch to (or click) the tab and it claims the widget automatically. If it never appears on one site, check whether that site is in the "hidden on" list in settings (or use *Hide / show on this site* in the Tampermonkey menu).
+- **Nothing on the page at all** — press the hotkey (default `Alt+Shift+T`) or use *Show / Hide widget* in the Tampermonkey menu; the widget may have been hidden.
+- **Widget missing in a tab** — expected unless that tab is the elected leader; switch to (or click) the tab and it claims the widget automatically. If it never appears on one site, check whether that site is in the "hidden on" list in settings (or use *Hide / show on this site* in the Tampermonkey menu).
 - **The tab title stopped showing the countdown on one site** — that site rewrites its own title whenever it changes; rather than fight it in a loop, the script leaves the title alone there until the tab next takes over.
 - **A particular letter won't type in the task box** — fixed in v1.3.2 (page shortcuts are now shielded from the widget's fields). A site that binds its hotkeys in the *capture* phase on `document` still runs before the event reaches the widget; that is inherent to Shadow DOM.
 - **A page froze after typing a task with double spaces** — fixed in v1.4.0.

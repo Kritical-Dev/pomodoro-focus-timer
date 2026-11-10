@@ -117,9 +117,10 @@ test('loadStats sanitises, prunes and resists prototype keys', () => {
 });
 
 test('loadUi', () => {
-  assert.deepEqual(loadUi(null), { mode: 'card', hidden: false, pos: null });
-  assert.deepEqual(loadUi({ mode: 'pill', hidden: true, pos: { left: 5, top: 6, x: 1 } }), { mode: 'pill', hidden: true, pos: { left: 5, top: 6 } });
-  assert.deepEqual(loadUi({ mode: 'weird', hidden: 'yes', pos: { left: 'a', top: 1 } }), { mode: 'card', hidden: false, pos: null });
+  assert.deepEqual(loadUi(null), { v: 2, mode: 'card', hidden: false, pos: null });
+  assert.deepEqual(loadUi({ v: 2, mode: 'pill', hidden: true, pos: { left: 5, top: 6, x: 1 } }), { v: 2, mode: 'pill', hidden: true, pos: { left: 5, top: 6 } });
+  assert.deepEqual(loadUi({ mode: 'weird', hidden: 'yes', pos: { left: 'a', top: 1 } }), { v: 2, mode: 'card', hidden: false, pos: null });
+  assert.equal(loadUi({ hidden: true }).hidden, false, 'hidden from the drawer-tab era is not honoured');
   assert.deepEqual(loadUi({ pos: { left: Infinity, top: NaN } }).pos, null);
 });
 

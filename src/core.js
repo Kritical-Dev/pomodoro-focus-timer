@@ -170,12 +170,16 @@ function loadToday(raw, now) {
   return own(s, raw.key) ? { key: raw.key, day: s[raw.key] } : null; // own(): "__proto__" is not a day
 }
 
+// `v` marks the layout the record was saved under. Before v2 a hidden widget
+// could be reopened from a drawer tab that no longer exists, so a "hidden"
+// flag saved back then is dropped rather than leaving nothing on screen.
 function loadUi(raw) {
   const r = isObj(raw) ? raw : {};
   const p = r.pos;
   return {
+    v: 2,
     mode: r.mode === 'pill' ? 'pill' : 'card',
-    hidden: r.hidden === true,
+    hidden: r.hidden === true && r.v === 2,
     pos: isObj(p) && finite(p.left) && finite(p.top) ? { left: p.left, top: p.top } : null,
   };
 }

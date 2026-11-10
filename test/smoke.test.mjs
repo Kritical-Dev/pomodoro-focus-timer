@@ -125,11 +125,11 @@ const allStats = () => {
 const main = async () => {
   section('Boot & widget visibility');
   const A = await boot();
-  const tab = A.$('#pw-tab');
+  // The Tampermonkey menu entry (the hotkey does the same thing).
+  const toggleShown = X => X.menu.find(m => m.label.includes('Show / Hide')).fn();
   check('the leading tab builds the widget', A.built);
   check('card is visible', !A.$('#pw-card').classList.contains('hidden'));
-  check('drawer tab is visible (no "hidden")', !tab.classList.contains('hidden'), tab.className);
-  check('drawer tab shows the down arrow while open', A.$('#pw-tab-icon').innerHTML.includes('M7.41 8.59'));
+  check('there is no drawer tab or hide button', !A.$('#pw-tab') && !A.$('[data-act="hide"]'));
 
   section('Tabs that never lead stay inert');
   const leaderBefore = store.get('pomodoro.leader');
@@ -140,7 +140,7 @@ const main = async () => {
   await until(() => C.built);
   check('becoming visible builds the widget', C.built);
   check('becoming visible claims leadership', leaderOf().id !== JSON.parse(leaderBefore).id);
-  check('the previous leader yields', A.$('#pw-tab').classList.contains('hidden'));
+  check('the previous leader yields', A.$('#pw-card').classList.contains('hidden'));
   A.w.dispatchEvent(new A.w.Event('focus'));
   await until(() => !A.$('#pw-card').classList.contains('hidden'));
   check('focusing the old tab takes leadership back', !A.$('#pw-card').classList.contains('hidden'));
@@ -182,21 +182,22 @@ const main = async () => {
   const B = await boot();
   check('newest focused tab is the leader (widget shown)', !B.$('#pw-card').classList.contains('hidden'));
   check('previous tab yields (widget hidden)', A.$('#pw-card').classList.contains('hidden'));
-  check('previous tab hides the drawer tab too', A.$('#pw-tab').classList.contains('hidden'));
   check('previous tab restores the site title', A.w.document.title === 'New Site Title', JSON.stringify(A.w.document.title));
   check('leader tab keeps the countdown', B.w.document.title.includes('Short Break'), JSON.stringify(B.w.document.title));
   A.w.dispatchEvent(new A.w.Event('focus'));
   await sleep(50);
-  check('focusing the old tab reclaims leadership', !A.$('#pw-tab').classList.contains('hidden'));
-  check('the other tab yields again', B.$('#pw-tab').classList.contains('hidden'));
+  check('focusing the old tab reclaims leadership', !A.$('#pw-card').classList.contains('hidden'));
+  check('the other tab yields again', B.$('#pw-card').classList.contains('hidden'));
 
-  section('Drawer tab toggling');
-  A.$('#pw-tab').click();
-  check('tab click hides the widget', A.$('#pw-card').classList.contains('hidden'));
-  check('tab arrow flips to up when hidden', A.$('#pw-tab-icon').innerHTML.includes('M7.41 15.41'));
-  A.$('#pw-tab').click();
-  check('tab click shows the widget again', !A.$('#pw-card').classList.contains('hidden'));
-  check('tab arrow flips to down when shown', A.$('#pw-tab-icon').innerHTML.includes('M7.41 8.59'));
+  section('Collapsed timer ⇄ full widget');
+  A.$('[data-act="min"]').click();
+  check('collapsing leaves just the timer', A.$('#pw-card').classList.contains('hidden') && !A.$('#pw-pill').classList.contains('hidden'));
+  check('the timer shows the countdown', /^\d\d:\d\d$/.test(A.$('#pw-pill-time').textContent), A.$('#pw-pill-time').textContent);
+  B.w.dispatchEvent(new B.w.Event('focus'));
+  check('the collapsed state follows you to another tab', !B.$('#pw-pill').classList.contains('hidden') && B.$('#pw-card').classList.contains('hidden') && A.$('#pw-pill').classList.contains('hidden'));
+  A.w.dispatchEvent(new A.w.Event('focus'));
+  A.$('#pw-pill').click();
+  check('clicking the timer opens the widget', !A.$('#pw-card').classList.contains('hidden') && A.$('#pw-pill').classList.contains('hidden'));
 
   section('Settings & quality-of-life');
   const setNum = (key, v) => {
@@ -237,12 +238,11 @@ const main = async () => {
   check('reset-settings refreshes the fields', A.$('#pw-set-focusMin').value === '25', A.$('#pw-set-focusMin').value);
   check('reset-settings re-adopts the duration', A.$('#pw-time').textContent === '25:00', A.$('#pw-time').textContent);
 
-  A.$('[data-act="hide"]').click();
-  check('the hide button hides the widget', A.$('#pw-card').classList.contains('hidden'));
-  check('the drawer tab stays available while hidden', !A.$('#pw-tab').classList.contains('hidden'));
-  check('the drawer arrow points up while hidden', A.$('#pw-tab-icon').innerHTML.includes('M7.41 15.41'));
-  A.$('#pw-tab').click();
-  check('the drawer tab brings the widget back', !A.$('#pw-card').classList.contains('hidden'));
+  toggleShown(A);
+  check('the menu / hotkey can hide everything', A.$('#pw-card').classList.contains('hidden') && A.$('#pw-pill').classList.contains('hidden'));
+  check('the countdown stays in the tab title while hidden', A.w.document.title.includes('25:00'), A.w.document.title);
+  toggleShown(A);
+  check('...and bring the widget back', !A.$('#pw-card').classList.contains('hidden'));
 
   A.$('[data-act="settings"]').click();
   check('the settings panel opens', !A.$('#pw-view-settings').classList.contains('hidden'));
@@ -507,7 +507,7 @@ const main = async () => {
   A.$('[data-act="settings"]').click();
   check('the settings offer to hide on this site', A.$('#pw-exclude').textContent === 'Hide on example.com', A.$('#pw-exclude').textContent);
   A.$('#pw-exclude').click();
-  check('excluding hides the widget and the drawer tab', A.$('#pw-card').classList.contains('hidden') && A.$('#pw-tab').classList.contains('hidden'));
+  check('excluding hides the widget', A.$('#pw-card').classList.contains('hidden') && A.$('#pw-pill').classList.contains('hidden'));
   check('the site is saved', settingsNow().excluded.join() === 'example.com', JSON.stringify(settingsNow().excluded));
   check('the tab title is handed back', A.w.document.title === 'Mine!', A.w.document.title);
   A.w.dispatchEvent(new A.w.Event('focus'));
@@ -515,9 +515,9 @@ const main = async () => {
   press(A.w.document.body, { altKey: true, shiftKey: true, code: 'KeyT', key: 'T' });
   A.menu.find(m => m.label.includes('Start')).fn();
   await sleep(30);
-  check('focus, hotkey and menu stay inert on an excluded site', A.$('#pw-tab').classList.contains('hidden') && leaderOf().id === '', JSON.stringify(leaderOf()));
+  check('focus, hotkey and menu stay inert on an excluded site', A.$('#pw-card').classList.contains('hidden') && leaderOf().id === '', JSON.stringify(leaderOf()));
   siteSwitch.fn();
-  check('the menu switch brings the widget back', !A.$('#pw-tab').classList.contains('hidden') && settingsNow().excluded.length === 0);
+  check('the menu switch brings the widget back', !A.$('#pw-card').classList.contains('hidden') && settingsNow().excluded.length === 0);
   A.$('[data-act="back"]').click();
 
   section('A phase that ended while no tab was open');
@@ -586,8 +586,8 @@ const main = async () => {
   G.$('#pw-hotkey').dispatchEvent(new G.w.KeyboardEvent('keydown', { bubbles: true, composed: true, cancelable: true, ctrlKey: true, altKey: true, code: 'KeyJ', key: 'j' }));
   A.w.document.body.dispatchEvent(new A.w.KeyboardEvent('keydown', { bubbles: true, cancelable: true, ctrlKey: true, altKey: true, code: 'KeyJ', key: 'j' }));
   await sleep(30);
-  check('...but picks up a hotkey changed in another tab', !A.$('#pw-tab').classList.contains('hidden') && A.$('#pw-card').classList.contains('hidden'), A.reads.join(' '));
-  A.$('#pw-tab').click(); // the hotkey hid the widget; show it again
+  check('...but picks up a hotkey changed in another tab', A.w.document.title.includes('\u{1F345}') && A.$('#pw-card').classList.contains('hidden'), A.w.document.title);
+  toggleShown(A); // the hotkey took over and hid the widget; show it again
   A.$('[data-act="settings"]').click();
   A.$('#pw-reset-settings').click();
   A.$('[data-act="back"]').click();
@@ -604,9 +604,9 @@ const main = async () => {
   A.$('#pw-tgl-titleTimer').dispatchEvent(new A.w.Event('change'));
   A.$('[data-act="back"]').click();
   check('...still, while the widget shows it', delays[delays.length - 1] <= 1000, String(delays[delays.length - 1]));
-  A.$('[data-act="hide"]').click();
+  toggleShown(A);
   check('hidden widget + no title countdown → one wake at the phase end', delays[delays.length - 1] === 25 * 60000, String(delays[delays.length - 1]));
-  A.$('#pw-tab').click();
+  toggleShown(A);
   check('showing the widget resumes the per-second wakes', delays[delays.length - 1] <= 1000, String(delays[delays.length - 1]));
   check('...with the right time', A.$('#pw-time').textContent === '25:00', A.$('#pw-time').textContent);
   A.w.setTimeout = realSetTimeout;
@@ -614,6 +614,13 @@ const main = async () => {
   A.$('#pw-reset-settings').click();
   A.$('[data-act="back"]').click();
   A.$('[data-act="reset"]').click();
+
+  section('Upgrading from the drawer-tab layout');
+  store.set('pomodoro.ui', JSON.stringify({ mode: 'card', hidden: true, pos: null }));
+  const U = await boot();
+  check('a widget hidden behind the old drawer tab reappears', !U.$('#pw-card').classList.contains('hidden'));
+  toggleShown(U);
+  toggleShown(U);
 
   section('Corrupt / hostile storage is sanitised');
   const dk = localKey(fakeNow);
@@ -651,7 +658,7 @@ const main = async () => {
   check('styles are adopted (immune to a strict style-src CSP)', SCRIPT.includes('adoptedStyleSheets'));
   check('no native confirm() dialogs', !/\bconfirm\(/.test(SCRIPT));
   check('UI is built lazily, not at startup', SCRIPT.includes('function buildUI()'));
-  check('a hide action exists in the widget', SCRIPT.includes('data-act="hide"'));
+  check('no drawer tab in the build', !SCRIPT.includes('pw-tab'));
   check('metadata declares an icon', SCRIPT.includes('// @icon'));
   check('iframes are excluded at metadata level', SCRIPT.includes('// @noframes'));
   check('reduced-motion is honoured in CSS', SCRIPT.includes('prefers-reduced-motion'));

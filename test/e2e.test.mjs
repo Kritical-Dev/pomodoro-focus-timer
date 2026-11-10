@@ -95,9 +95,7 @@ test('renders with the intended geometry and no errors', () => withContext(async
   assert.ok(card.height > 300 && card.height < 520, 'card height ' + card.height);
   assert.equal(Math.round(card.x + card.width), 1000 - 20, 'docked 20px from the right');
   assert.equal(Math.round(card.y + card.height), 700 - 20, 'docked 20px from the bottom');
-  const tab = await box(p, '#pw-tab');
-  assert.equal(tab.x, 16, 'drawer tab 16px from the left');
-  assert.equal(Math.round(tab.y + tab.height), 700, 'drawer tab flush with the bottom');
+  assert.equal(await p.locator('#pw-tab').count(), 0, 'no drawer tab');
   assert.equal(await css(p, '#pw-time', 'fontSize'), '30px');
   assert.equal(await css(p, '#pw-card', 'backgroundColor'), 'rgb(15, 23, 42)');
   assert.equal(await css(p, '#pw-phase', 'color'), 'rgb(244, 63, 94)');
@@ -247,23 +245,26 @@ test('dragging moves the widget and the position persists', () => withContext(as
   assert.equal((await box(p, '#pw-card')).x, far.x, 'back where the user left it');
 }));
 
-test('pill, drawer tab and hotkey', () => withContext(async ctx => {
+test('collapsed timer, full widget and hotkey', () => withContext(async ctx => {
   const p = await open(ctx);
   await p.locator('[data-act="min"]').click();
   assert.ok(await p.locator('#pw-pill').isVisible());
   assert.ok(await p.locator('#pw-card').isHidden());
   const pill = await box(p, '#pw-pill');
   assert.ok(pill.width < 120 && pill.height < 40, JSON.stringify(pill));
+  // The collapsed timer sits where the widget was docked (bottom-right).
+  assert.equal(Math.round(pill.x + pill.width), 1000 - 20);
+  assert.equal(Math.round(pill.y + pill.height), 700 - 20);
   await p.locator('#pw-pill').click();
-  assert.ok(await p.locator('#pw-card').isVisible());
-
-  await p.locator('#pw-tab').click();
-  assert.ok(await p.locator('#pw-card').isHidden());
-  assert.ok(await p.locator('#pw-tab').isVisible(), 'the drawer tab stays');
+  assert.ok(await p.locator('#pw-card').isVisible(), 'clicking the timer opens the widget');
+  assert.ok(await p.locator('#pw-pill').isHidden());
 
   await p.locator('h1').click();
   await p.keyboard.press('Alt+Shift+KeyT');
-  assert.ok(await p.locator('#pw-card').isVisible(), 'hotkey shows the widget');
+  assert.ok(await p.locator('#pw-card').isHidden(), 'the hotkey hides everything');
+  assert.ok(await p.locator('#pw-pill').isHidden());
+  await p.keyboard.press('Alt+Shift+KeyT');
+  assert.ok(await p.locator('#pw-card').isVisible(), 'and shows the widget again');
   // Alt combos type characters on macOS, so a page field keeps them.
   await p.locator('#page-input').click();
   await p.keyboard.press('Alt+Shift+KeyT');
@@ -305,7 +306,6 @@ test('the timer follows the focused tab (localStorage fallback path)', () => wit
   assert.ok(await b.locator('#pw-card').isVisible(), 'the new tab leads');
   assert.equal(await b.locator('#pw-state').textContent(), 'Focusing…', 'and picks up the running timer');
   await a.locator('#pw-card').waitFor({ state: 'hidden' }); // the old tab yields
-  assert.ok(await a.locator('#pw-tab').isHidden());
   assert.equal(await a.title(), 'Example Page', 'and hands its title back');
 
   await b.locator('#pw-play').click(); // pause in the new leader
@@ -355,7 +355,6 @@ test('hides while the page is fullscreen', () => withContext(async ctx => {
   await p.evaluate(() => document.documentElement.requestFullscreen());
   await p.waitForFunction(() => !!document.fullscreenElement);
   await p.locator('#pw-card').waitFor({ state: 'hidden' });
-  assert.ok(await p.locator('#pw-tab').isHidden());
   await p.evaluate(() => document.exitFullscreen());
   await p.locator('#pw-card').waitFor({ state: 'visible' });
 }));
@@ -365,7 +364,7 @@ test('an excluded site stays clear until re-enabled elsewhere', () => withContex
   await p.locator('[data-act="settings"]').click();
   assert.equal(await p.locator('#pw-exclude').textContent(), 'Hide on app.test');
   await p.locator('#pw-exclude').click();
-  await p.locator('#pw-tab').waitFor({ state: 'hidden' });
+  await p.locator('#pw-card').waitFor({ state: 'hidden' });
   assert.equal(await p.title(), 'Example Page');
 
   // A new page on the excluded site never builds a widget.
