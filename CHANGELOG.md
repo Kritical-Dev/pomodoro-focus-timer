@@ -27,6 +27,12 @@ All notable changes to the userscript. Versions follow [semantic versioning](htt
 - The hotkey is ignored while typing in a page field if it would type a character (Alt combos on macOS).
 - Styles are applied through a constructed stylesheet, so the widget also works on sites whose CSP forbids inline styles.
 
+### Performance
+- Stats are stored as a small record for today plus the 90-day history. Crediting focus time writes only today's record; the history is written about once a day and read only when the stats view, an export or the task autocomplete needs it — not on every tab switch. Existing stats are carried over automatically.
+- The audio context is suspended between chimes instead of running for the life of the tab.
+- Settings are cached in tabs that don't lead, so the hotkey check on each modifier key press no longer reads storage.
+- No per-second wakes when nothing is on screen (widget hidden and title countdown off): the timer sleeps until the phase ends.
+
 ### Fixed
 - Focus time for a round that straddles midnight is split between the two days.
 - A site that rewrites its title whenever it changes no longer ping-pongs with the countdown; the script backs off.
@@ -35,6 +41,9 @@ All notable changes to the userscript. Versions follow [semantic versioning](htt
 ### Development
 - Unit tests for the pure logic, a real-browser suite (Playwright driving the installed Chrome), ESLint, and a tag-triggered release workflow.
 - The userscript's `@version` is injected from `package.json`.
+
+### Upgrade note
+- Reload tabs that were open before updating. A tab still running 1.x keeps writing today's focus time in the old layout, and that time is not picked up by 2.0 tabs.
 
 ## [1.4.0]
 - Fixed a page freeze caused by a task containing repeated spaces (tab-title feedback loop).

@@ -194,6 +194,13 @@
     return out;
   }
 
+  // The frequently written record for the current day: { key, day }.
+  function loadToday(raw, now) {
+    if (!isObj(raw) || typeof raw.key !== 'string') return null;
+    const s = loadStats({ [raw.key]: raw.day }, now);
+    return own(s, raw.key) ? { key: raw.key, day: s[raw.key] } : null; // own(): "__proto__" is not a day
+  }
+
   function loadUi(raw) {
     const r = isObj(raw) ? raw : {};
     const p = r.pos;
@@ -242,15 +249,16 @@
   }
 
   // When the engine should wake next (ms from now) — exactly when what is
-  // displayed is due to change, so the readout is never late:
-  //   visible            → the next whole second of remaining time
-  //   hidden, title on   → the next whole minute of remaining time (tab title)
-  //   hidden, title off  → the moment the phase ends
-  function nextWakeDelay(now, endsAt, hidden, titleTimer) {
-    const remaining = endsAt - now;
+  // displayed is due to change, so the readout is never late and no wake is
+  // spent on something nobody can see:
+  //   'seconds' → the next whole second of remaining time (a visible clock)
+  //   'minutes' → the next whole minute (a backgrounded tab's title)
+  //   'none'    → the moment the phase ends (nothing on screen at all)
+  function nextWakeDelay(remaining, display) {
     if (remaining <= 0) return 0;
-    if (!hidden) return (remaining % 1000) || 1000;
-    return titleTimer ? (remaining % 60000) || 60000 : remaining;
+    if (display === 'seconds') return (remaining % 1000) || 1000;
+    if (display === 'minutes') return (remaining % 60000) || 60000;
+    return remaining;
   }
 
   /* ---- focus-time accounting ---- */
@@ -381,7 +389,7 @@
     },
   };
 
-  const KEYS = { state: 'pomodoro.state', settings: 'pomodoro.settings', stats: 'pomodoro.stats', ui: 'pomodoro.ui', leader: 'pomodoro.leader' };
+  const KEYS = { state: 'pomodoro.state', settings: 'pomodoro.settings', stats: 'pomodoro.stats', today: 'pomodoro.today', ui: 'pomodoro.ui', leader: 'pomodoro.leader' };
   const RING_LEN = 2 * Math.PI * 54; // r=54 viewBox circle
   const FLUSH_MS = 15000; // credit focus time to stats at least this often (keeps "Today" live)
 
@@ -418,13 +426,67 @@
 
   function saveState() { store.set(KEYS.state, S); }
   function saveSettings() { store.set(KEYS.settings, settings); }
-  function saveStats() { store.set(KEYS.stats, stats); }
   function saveUi() { store.set(KEYS.ui, ui); }
+
+  /* ---- Stats storage ----
+   * Two values, so the write that happens every few seconds stays tiny:
+   *   pomodoro.today — { key, day } for the current day; written on every credit
+   *   pomodoro.stats — the 90-day history; written about once a day (rollover),
+   *                    and on import
+   * The history is also *read* lazily — only when the stats view, an export or
+   * the task autocomplete needs it — so a tab switch never parses 90 days.
+   *
+   * `stats` is the merged in-memory view. Until the history is loaded it holds
+   * only the day from pomodoro.today (`memKey`); that record is authoritative
+   * for its day (the history's copy of it may be stale), which is why
+   * loadHistory() never overwrites a day already in memory, and why anything
+   * that touches another day must call loadHistory() first. */
+  let historyLoaded = false;
+  let memKey = ''; // the one day held in memory while the history is not loaded
+
+  function loadHistory() {
+    if (historyLoaded) return;
+    historyLoaded = true;
+    const h = loadStats(store.get(KEYS.stats), Date.now());
+    for (const k of Object.keys(h)) if (!stats[k]) stats[k] = h[k];
+  }
+
+  // `full` when a day other than today changed (rollover, import).
+  function saveStats(full) {
+    const today = dkey(Date.now());
+    if (full || today !== memKey) {
+      loadHistory();
+      store.set(KEYS.stats, stats);
+      memKey = today;
+    }
+    store.set(KEYS.today, { key: today, day: stats[today] || newDay() });
+  }
+
+  function loadStatsForLeader(now) {
+    const today = dkey(now);
+    const rec = loadToday(store.get(KEYS.today), now);
+    stats = {};
+    historyLoaded = false;
+    memKey = rec ? rec.key : today;
+    if (rec) stats[rec.key] = rec.day;
+    // No record yet (first run, or first run after updating from the single-
+    // value layout, where today still lives in the history), or the record is
+    // from an earlier day: fold it into the history and start today's record.
+    if (!rec || rec.key !== today) saveStats(true);
+  }
 
   const HOST = normalizeHost(location.hostname);
 
-  // Settings as they are right now, without requiring this tab to lead.
-  function liveSettings() { return isLeader ? settings : loadSettings(store.get(KEYS.settings)); }
+  // Settings as they are right now, without requiring this tab to lead. Read on
+  // every modifier key press (hotkey check), so a tab that does not lead keeps
+  // a copy and only re-reads storage after the stored value changed.
+  let cfgCache = null;
+  let cfgWatched = false; // true once a change listener keeps cfgCache honest
+  function liveSettings() {
+    if (isLeader) return settings;
+    if (!cfgWatched) return loadSettings(store.get(KEYS.settings));
+    return cfgCache || (cfgCache = loadSettings(store.get(KEYS.settings)));
+  }
   function excludedHere() { return hostExcluded(HOST, liveSettings().excluded); }
 
   // Pages that enforce Trusted Types (YouTube, Gmail, …) reject plain strings
@@ -461,11 +523,13 @@
     if (!S.running || S.phase !== 'focus') return;
     const now = Date.now();
     const today = dkey(now);
+    const crossesDays = dkey(S.lastTick) !== memKey || today !== memKey;
+    if (crossesDays) loadHistory();
     const before = stats[today] ? stats[today].focus : 0;
     const r = creditFocus(stats, S.task, S.lastTick, Math.min(now, S.endsAt), final);
     if (r.until === S.lastTick) return;
     S.lastTick = r.until;
-    if (r.sec > 0) saveStats();
+    if (r.sec > 0) saveStats(crossesDays);
     saveState(); // keeps the stored (stats, state) pair consistent
 
     const goal = settings.goalMin * 60;
@@ -486,16 +550,23 @@
   };
 
   let actx = null;
-  // Created/resumed from a click inside the widget so autoplay policies let
-  // the completion chime play later, even from a background tab.
-  function audio() {
+  let audioRest = null;
+  // The context is created from a click inside the widget so autoplay policies
+  // let the completion chime play later, even from a background tab. A running
+  // AudioContext keeps an audio thread awake, so it is suspended again as soon
+  // as nothing is sounding and only resumed for the second a chime lasts.
+  function audio(busyMs) {
     try {
       if (!actx) {
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return null;
         actx = new AC();
       }
-      if (actx.state === 'suspended') Promise.resolve(actx.resume()).catch(() => {});
+      if (busyMs && actx.state === 'suspended') Promise.resolve(actx.resume()).catch(() => {});
+      clearTimeout(audioRest);
+      audioRest = setTimeout(() => {
+        if (actx.state === 'running') Promise.resolve(actx.suspend()).catch(() => {});
+      }, busyMs + 250);
       return actx;
     } catch (e) {
       return null;
@@ -519,7 +590,7 @@
   // Rising notes when focus ends, falling when a break ends.
   function chime(kind) {
     if (!settings.sound || !settings.volume) return;
-    const ctx = audio();
+    const ctx = audio(1200); // the three notes last ~0.75 s
     if (!ctx) return;
     try {
       const c = CHIMES[settings.chime];
@@ -550,9 +621,10 @@
    *
    * The script never polls. One self-rescheduling timeout is armed only
    * while the timer runs, and only as often as it buys something (see
-   * nextWakeDelay in core.js): once a second while visible, once a minute
-   * while hidden with the title countdown on, otherwise only at the phase
-   * end. Paused, or not the leader → no timers at all.
+   * nextWakeDelay in core.js): once a second while a clock is visible, once
+   * a minute for a backgrounded tab's title, and only at the phase end when
+   * nothing is on screen (widget hidden and title countdown off).
+   * Paused, or not the leader → no timers at all.
    * Countdown math is pure timestamp arithmetic (endsAt vs Date.now()), so
    * throttled or coalesced wakeups introduce no drift.
    * ------------------------------------------------------------------ */
@@ -560,10 +632,17 @@
 
   function stopTicker() { if (wakeTimer !== null) { clearTimeout(wakeTimer); wakeTimer = null; } }
 
+  // How finely the remaining time is currently being shown to anyone.
+  function displayGrain() {
+    if (document.hidden) return settings.titleTimer && !titleYielded ? 'minutes' : 'none';
+    const widgetShown = built && !ui.hidden && !document.fullscreenElement;
+    return widgetShown || (settings.titleTimer && !titleYielded) ? 'seconds' : 'none';
+  }
+
   function scheduleTick() {
     stopTicker();
     if (!isLeader || !S.running) return;
-    wakeTimer = setTimeout(tick, nextWakeDelay(Date.now(), S.endsAt, document.hidden, settings.titleTimer));
+    wakeTimer = setTimeout(tick, nextWakeDelay(S.endsAt - Date.now(), displayGrain()));
   }
 
   function syncRemaining() { if (S.running) S.remaining = Math.max(0, S.endsAt - Date.now()); }
@@ -622,8 +701,10 @@
     const finished = S.phase;
     if (finished === 'focus' && completed) {
       // Credited to the day the round ended on.
-      dayEntry(stats, dkey(S.running ? Math.min(Date.now(), S.endsAt) : Date.now())).rounds += 1;
-      saveStats();
+      const day = dkey(S.running ? Math.min(Date.now(), S.endsAt) : Date.now());
+      if (day !== memKey) loadHistory();
+      dayEntry(stats, day).rounds += 1;
+      saveStats(day !== memKey);
     }
     Object.assign(S, nextPhase(S, settings));
     S.duration = S.remaining = durationFor(settings, S.phase);
@@ -904,6 +985,7 @@
   // Stay out of the way of fullscreen video and presentations.
   function syncFullscreen() {
     host.style.setProperty('display', document.fullscreenElement ? 'none' : 'block', 'important');
+    scheduleTick();
   }
 
   /* ------------------------------------------------------------------ *
@@ -1090,7 +1172,7 @@
     const list = cfg.excluded.filter(h => !hostExcluded(HOST, [h]));
     if (on) list.push(HOST);
     if (isLeader) applySettings({ excluded: list });
-    else store.set(KEYS.settings, Object.assign(cfg, { excluded: list }));
+    else { store.set(KEYS.settings, Object.assign({}, cfg, { excluded: list })); cfgCache = null; }
     if (!on) claimLeadership();
     else if (isLeader) {
       store.set(KEYS.leader, { id: '', ts: Date.now() }); // nobody leads until another tab is focused
@@ -1167,6 +1249,7 @@
 
   function exportStats(format) {
     flushFocus();
+    loadHistory();
     const now = Date.now();
     const name = 'pomodoro-stats-' + dkey(now) + '.' + format;
     try {
@@ -1188,8 +1271,9 @@
       const imported = parseImport(String(reader.result), Date.now());
       if (!imported) { showStatsMsg('No usable stats in that file.'); return; }
       flushFocus();
+      loadHistory();
       const n = mergeStats(stats, imported);
-      saveStats();
+      saveStats(true);
       renderStats();
       refreshTaskList();
       render();
@@ -1205,7 +1289,7 @@
     el.viewSettings.classList.toggle('hidden', name !== 'settings');
     el.viewStats.classList.toggle('hidden', name !== 'stats');
     if (name === 'settings') syncSettingsView();
-    if (name === 'stats') { showStatsMsg(''); renderStats(); }
+    if (name === 'stats') { showStatsMsg(''); loadHistory(); renderStats(); }
   }
 
   // The drawer tab is position:fixed (viewport-relative) inside the shadow root,
@@ -1224,6 +1308,7 @@
     // The visible surface just changed, so the render cache is stale.
     painted = {};
     render();
+    scheduleTick(); // a hidden widget may need no wakes at all
   }
 
   function setUi(patch) {
@@ -1247,7 +1332,7 @@
   function reloadSharedState() {
     const now = Date.now();
     settings = loadSettings(store.get(KEYS.settings));
-    stats = loadStats(store.get(KEYS.stats), now);
+    loadStatsForLeader(now);
     ui = loadUi(store.get(KEYS.ui));
     S = loadState(store.get(KEYS.state), settings, now);
     noticeText = '';
@@ -1279,6 +1364,7 @@
   function yieldLeadership() {
     if (!isLeader) return;
     isLeader = false;
+    cfgCache = null;
     stopTicker();
     restoreTitle(); // hand the tab title back
     applyVisibility();
@@ -1306,9 +1392,15 @@
   if (typeof GM_addValueChangeListener !== 'undefined') {
     try {
       GM_addValueChangeListener(KEYS.leader, (k, o, v, remote) => { if (remote) checkLeadership(); });
+      GM_addValueChangeListener(KEYS.settings, () => { cfgCache = null; });
+      cfgWatched = true;
     } catch (e) { /* older managers */ }
   } else {
-    window.addEventListener('storage', e => { if (e.key === KEYS.leader) checkLeadership(); });
+    window.addEventListener('storage', e => {
+      if (e.key === KEYS.leader) checkLeadership();
+      else if (e.key === KEYS.settings || e.key === null) cfgCache = null;
+    });
+    cfgWatched = true;
   }
 
   document.addEventListener('visibilitychange', () => {
@@ -1360,7 +1452,7 @@
     for (const type of ['keydown', 'keypress', 'keyup']) shadow.addEventListener(type, shieldKeys);
 
     shadow.addEventListener('click', e => {
-      if (settings.sound) audio(); // unlock audio inside a user gesture (autoplay policies)
+      if (settings.sound && !actx) audio(0); // create the context inside a user gesture (autoplay policies)
 
       const chip = e.target.closest('[data-unexclude]');
       if (chip) {
@@ -1407,12 +1499,18 @@
             disarmClear();
             flushFocus();
             delete stats[dkey(Date.now())];
-            saveStats();
+            saveStats(false);
             renderStats();
             render();
           }
           break;
       }
+    });
+
+    // Autocomplete draws on the whole history; fetch it the first time the
+    // field is used rather than on every tab switch.
+    el.task.addEventListener('focus', () => {
+      if (!historyLoaded) { loadHistory(); refreshTaskList(); }
     });
 
     // Task input — credit focus time to the previous task before switching.

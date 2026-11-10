@@ -94,7 +94,8 @@ for the moment the display is due to change:
 
 | State | Wakeups | DOM work |
 |---|---|---|
-| Running, tab visible | one per second, exactly when the displayed second changes | only what changed |
+| Running, a clock is visible (widget or title) | one per second, exactly when the displayed second changes | only what changed |
+| Running, tab visible, widget hidden, title countdown off | a single wake when the phase ends | none |
 | Running, tab hidden, title countdown on | one per minute | the tab title |
 | Running, tab hidden, title countdown off | a single wake when the phase ends | none |
 | Paused / ready | none | none |
@@ -111,8 +112,16 @@ in steady state a wakeup mutates nothing but the time. Only the visible surface
 is updated (a minimized pill skips all card work, a hidden widget skips
 everything but the tab title).
 
-**Misc.** No `backdrop-filter`. Focus time is credited to stats at most every
-15 s. There is no `unload`/`beforeunload` handler (those disable the
+**Storage writes stay small.** Stats live in two values: a record for today
+(a few hundred bytes, written whenever focus time is credited — at most every
+15 s) and the 90-day history (written about once a day, at rollover). The
+history is also only *read* when the stats view, an export or the task
+autocomplete needs it, so switching tabs never parses 90 days of data.
+Settings are cached in tabs that don't lead, so checking the hotkey on a key
+press costs no storage read.
+
+**Misc.** No `backdrop-filter`. The audio context is suspended between chimes
+rather than left running. There is no `unload`/`beforeunload` handler (those disable the
 back/forward cache on every site): saved state is always self-consistent, so
 there is nothing to write on the way out.
 
@@ -140,7 +149,7 @@ npm run test:all   # all of the above
 ### Tests
 
 - **Unit** (`test/core.test.mjs`) — the pure logic in `src/core.js`: sanitisers, phase order, wake scheduling, midnight splitting, focus crediting, CSV/JSON export and import.
-- **jsdom smoke suite** (`test/smoke.test.mjs`, ~150 checks) — boots real DOM windows with a shared Tampermonkey-like store (including cross-window change dispatch) and a fake clock: timer math, phase transitions, stats, tab-title handling, settings, cross-tab leadership and handoff, corrupt storage, Trusted Types, hotkeys, exclusions, export/import, and the privacy/update-metadata claims. A runaway mutation/render loop starves the event loop and can't be timed out from inside the same thread, so `test/run.mjs` runs the suite in a child process with a watchdog.
+- **jsdom smoke suite** (`test/smoke.test.mjs`, ~170 checks) — boots real DOM windows with a shared Tampermonkey-like store (including cross-window change dispatch) and a fake clock: timer math, phase transitions, stats, tab-title handling, settings, cross-tab leadership and handoff, corrupt storage, Trusted Types, hotkeys, exclusions, export/import, and the privacy/update-metadata claims. A runaway mutation/render loop starves the event loop and can't be timed out from inside the same thread, so `test/run.mjs` runs the suite in a child process with a watchdog.
 - **Real browser** (`test/e2e.test.mjs`) — what jsdom cannot see, in Chrome via Playwright: geometry, a deliberately hostile page stylesheet, Trusted Types and `style-src 'none'` enforcement, real typing and dragging, themes, file downloads, fullscreen, audio unlock, and cross-tab handoff over the `localStorage` fallback. Set `E2E_CHANNEL` to use another browser channel.
 
 ```sh
@@ -173,5 +182,6 @@ See [CHANGELOG.md](CHANGELOG.md) for the full history.
 - Timer state and settings are shared across all tabs via Tampermonkey storage; one tab (the last focused) is the elected "leader" that runs the engine, using `GM_addValueChangeListener` for instant handoff (`storage` events as fallback).
 - While you are on a page where the script cannot run (the new-tab page, `chrome://` pages, an excluded site), the previous tab keeps leading in the background: it still completes phases and notifies, and its title counts down in minutes.
 - If the browser is fully minimized for a long time, Chrome's intensive throttling may delay a completion chime by up to ~1 minute — the clock itself never drifts, since it's computed from timestamps. (This is inherent to userscripts; only a full extension with the `alarms` API can do better.)
+- After updating from 1.x, reload tabs that were already open: a tab still running the old version records today's focus time in the old storage layout, which 2.0 tabs do not read.
 - Importing a backup replaces the days it contains and keeps the rest; days older than 90 days are dropped.
 - Excluded from iframes via `@noframes` (and a top-frame check as a second guard).

@@ -175,7 +175,8 @@ test('the countdown runs, completes a round and credits it', () => withContext(a
   assert.equal(await p.locator('#pw-state').textContent(), 'Resting…', 'break auto-started');
   assert.equal(await css(p, '#pw-phase', 'color'), 'rgb(16, 185, 129)', 'accent follows the phase');
   assert.equal(await p.locator('#pw-dots i.done').count(), 1);
-  const day = (await stored(p, 'pomodoro.stats'))['2026-03-10'];
+  const { key, day } = await stored(p, 'pomodoro.today');
+  assert.equal(key, '2026-03-10');
   assert.equal(day.focus, 30 * 60);
   assert.equal(day.rounds, 1);
   assert.equal(await p.locator('#pw-today').textContent(), 'Today: 30m focused · 1 rounds');
@@ -190,7 +191,9 @@ test('a round that straddles midnight is split between the two days', () => with
   await p.clock.runFor(500);
   await p.locator('#pw-play').click();
   await p.clock.runFor(25 * 60_000 + 1000);
-  const stats = await stored(p, 'pomodoro.stats');
+  const today = await stored(p, 'pomodoro.today');
+  const stats = Object.assign(await stored(p, 'pomodoro.stats'), { [today.key]: today.day });
+  assert.equal(today.key, '2026-03-11', 'the frequently written record moved to the new day');
   assert.ok(Math.abs(stats['2026-03-10'].focus - 599) <= 1, JSON.stringify(stats)); // started just after 23:50:01
   assert.equal(stats['2026-03-10'].focus + stats['2026-03-11'].focus, 1500);
   assert.equal(stats['2026-03-11'].rounds, 1, 'the round counts on the day it finished');
@@ -306,7 +309,7 @@ test('the timer follows the focused tab (localStorage fallback path)', () => wit
   assert.equal(await a.title(), 'Example Page', 'and hands its title back');
 
   await b.locator('#pw-play').click(); // pause in the new leader
-  const focus = Object.values(await stored(b, 'pomodoro.stats')).reduce((n, d) => n + d.focus, 0);
+  const focus = (await stored(b, 'pomodoro.today')).day.focus;
   assert.ok(focus >= 2 && focus <= 4, 'time from both tabs counted once: ' + focus);
 
   await a.bringToFront();
@@ -389,13 +392,17 @@ test('the completion chime can play after a click in the widget', () => withCont
   await p.locator('#pw-card').waitFor();
   assert.equal(await p.evaluate(() => window.__audio.length), 0, 'no audio context before any interaction');
   await p.locator('[data-act="settings"]').click();
-  await p.waitForFunction(() => window.__audio.length === 1 && window.__audio[0].state === 'running');
+  await p.waitForFunction(() => window.__audio.length === 1);
+  // A running context keeps an audio thread awake, so it must not stay running.
+  await p.waitForFunction(() => window.__audio[0].state === 'suspended');
   // The preview chime schedules real oscillators without throwing.
   const errors = [];
   p.on('pageerror', e => errors.push(e.message));
   await p.locator('#pw-sel-chime').selectOption('digital');
+  await p.waitForFunction(() => window.__audio[0].state === 'running'); // resumed for the preview chime
   await p.locator('#pw-volume').fill('40');
-  await p.waitForTimeout(100);
+  await p.waitForFunction(() => window.__audio[0].state === 'suspended', null, { timeout: 5000 }); // and rests again
+  assert.equal(await p.evaluate(() => window.__audio.length), 1, 'one context, reused');
   assert.deepEqual(errors, []);
   assert.equal((await stored(p, 'pomodoro.settings')).volume, 40);
 }));

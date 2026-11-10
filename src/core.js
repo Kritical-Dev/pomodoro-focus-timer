@@ -163,6 +163,13 @@ function loadStats(raw, now, keepDays) {
   return out;
 }
 
+// The frequently written record for the current day: { key, day }.
+function loadToday(raw, now) {
+  if (!isObj(raw) || typeof raw.key !== 'string') return null;
+  const s = loadStats({ [raw.key]: raw.day }, now);
+  return own(s, raw.key) ? { key: raw.key, day: s[raw.key] } : null; // own(): "__proto__" is not a day
+}
+
 function loadUi(raw) {
   const r = isObj(raw) ? raw : {};
   const p = r.pos;
@@ -211,15 +218,16 @@ function nextPhase(state, settings) {
 }
 
 // When the engine should wake next (ms from now) — exactly when what is
-// displayed is due to change, so the readout is never late:
-//   visible            → the next whole second of remaining time
-//   hidden, title on   → the next whole minute of remaining time (tab title)
-//   hidden, title off  → the moment the phase ends
-function nextWakeDelay(now, endsAt, hidden, titleTimer) {
-  const remaining = endsAt - now;
+// displayed is due to change, so the readout is never late and no wake is
+// spent on something nobody can see:
+//   'seconds' → the next whole second of remaining time (a visible clock)
+//   'minutes' → the next whole minute (a backgrounded tab's title)
+//   'none'    → the moment the phase ends (nothing on screen at all)
+function nextWakeDelay(remaining, display) {
   if (remaining <= 0) return 0;
-  if (!hidden) return (remaining % 1000) || 1000;
-  return titleTimer ? (remaining % 60000) || 60000 : remaining;
+  if (display === 'seconds') return (remaining % 1000) || 1000;
+  if (display === 'minutes') return (remaining % 60000) || 60000;
+  return remaining;
 }
 
 /* ---- focus-time accounting ---- */
@@ -328,7 +336,7 @@ module.exports = {
   DEFAULT_SETTINGS, RANGES, CHOICES, PHASES, STATS_KEEP_DAYS, TASK_MAX, MAX_PHASE_MS, EXTEND_MS, UNTRACKED,
   clamp, dkey, fmtClock, fmtMinutes, fmtHuman,
   validHotkey, hotkeyFromEvent, hotkeyLabel, normalizeHost, hostExcluded,
-  loadSettings, loadStats, loadUi, loadState, dayEntry,
+  loadSettings, loadStats, loadToday, loadUi, loadState, dayEntry, newDay,
   durationFor, freshState, nextPhase, nextWakeDelay,
   splitByDay, creditFocus, recentTasks, buildTitle,
   csvCell, statsToCsv, statsToJson, parseImport, mergeStats,

@@ -17,7 +17,9 @@ const SCRIPT = fs.readFileSync(
 const store = new Map();
 const listeners = []; // { win, key, cb }
 
+const writes = []; // every key written through GM_setValue, in order
 function setValue(fromWindow, key, value) {
+  writes.push(key);
   store.set(key, value);
   for (const l of listeners) {
     if (l.key === key && l.win !== fromWindow) l.cb(key, undefined, value, true);
@@ -62,7 +64,8 @@ async function boot({ hidden = false, trustedTypes = false } = {}) {
 
   const notifications = [];
   const menu = []; // { label, fn } — Tampermonkey menu commands
-  w.GM_getValue = k => store.get(k);
+  const reads = []; // every key this window read through GM_getValue
+  w.GM_getValue = k => { reads.push(k); return store.get(k); };
   w.GM_setValue = (k, v) => setValue(w, k, v);
   w.GM_notification = n => notifications.push(n);
   w.GM_registerMenuCommand = (label, fn) => { menu.push({ label, fn }); };
@@ -92,7 +95,7 @@ async function boot({ hidden = false, trustedTypes = false } = {}) {
   const hostOf = () => w.document.getElementById('pomodoro-focus-timer-host');
   const shadowOf = () => { const h = hostOf(); return h ? h.shadowRoot : null; };
   return {
-    dom, w, notifications, menu,
+    dom, w, notifications, menu, reads,
     get built() { return !!hostOf(); },
     get shadow() { return shadowOf(); },
     $: sel => { const s = shadowOf(); return s ? s.querySelector(sel) : null; },
@@ -109,6 +112,14 @@ function section(t) { console.log('\n' + t); }
 
 const occurrences = (str, sub) => str.split(sub).length - 1;
 const leaderOf = () => JSON.parse(store.get('pomodoro.leader') || 'null');
+const localKey = ts => { const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+// Stats as the script sees them: the 90-day history with today's record on top.
+const allStats = () => {
+  const s = JSON.parse(store.get('pomodoro.stats') || '{}');
+  const t = JSON.parse(store.get('pomodoro.today') || 'null');
+  if (t) s[t.key] = t.day;
+  return s;
+};
 
 /* ================================================================== */
 const main = async () => {
@@ -155,8 +166,7 @@ const main = async () => {
   check('phase advanced to Short Break', A.$('#pw-phase').textContent === 'Short Break', A.$('#pw-phase').textContent);
   check('break auto-started (default setting)', A.$('#pw-state').textContent === 'Resting\u2026', A.$('#pw-state').textContent);
   check('the completion announced exactly once', A.notifications.length === 1, String(A.notifications.length));
-  const stats = JSON.parse(store.get('pomodoro.stats') || '{}');
-  const d = stats[Object.keys(stats)[0]] || {};
+  const d = allStats()[localKey(fakeNow)] || {};
   check('a focus round was credited', d.rounds === 1, JSON.stringify(d));
   check('focus time was credited', (d.focus || 0) > 0, JSON.stringify(d));
   check('task captured as Untracked', d.tasks && d.tasks.Untracked > 0, JSON.stringify(d.tasks));
@@ -278,7 +288,7 @@ const main = async () => {
   // Summed over every stored day, so the checks hold whatever day a credit lands on.
   const todayStats = () => {
     const t = { focus: 0, rounds: 0, tasks: Object.create(null) };
-    for (const d of Object.values(JSON.parse(store.get('pomodoro.stats') || '{}'))) {
+    for (const d of Object.values(allStats())) {
       t.focus += d.focus;
       t.rounds += d.rounds;
       for (const [n, v] of Object.entries(d.tasks)) t.tasks[n] = (t.tasks[n] || 0) + v;
@@ -415,7 +425,7 @@ const main = async () => {
   const csv = await readBlob(blobs[0]);
   check('the CSV has a header and task rows', csv.startsWith('date,task,focus_seconds') && csv.includes(',Untracked,'), csv.slice(0, 120));
   const backup = await readBlob(blobs[1]);
-  check('the backup round-trips the stats', JSON.stringify(JSON.parse(backup).stats) === store.get('pomodoro.stats'));
+  check('the backup holds every day, today included', JSON.stringify(JSON.parse(backup).stats) === JSON.stringify(allStats()), backup.slice(0, 200));
 
   A.$('#pw-clear').click();
   A.$('#pw-clear').click();
@@ -520,13 +530,100 @@ const main = async () => {
   check('crediting only the time up to the phase end', todayStats().focus - before.focus === 600 && todayStats().tasks.Away === 600, todayStats().focus - before.focus);
   F.$('[data-act="reset"]').click();
 
+  section('Stats storage: small frequent writes, history on demand');
+  A.w.dispatchEvent(new A.w.Event('focus'));
+  await until(() => !A.$('#pw-card').classList.contains('hidden'));
+  A.$('[data-act="reset"]').click();
+  B.reads.length = 0;
+  B.w.dispatchEvent(new B.w.Event('focus'));
+  await until(() => !B.$('#pw-card').classList.contains('hidden'));
+  check('taking over reads today\'s record, not the 90-day history', B.reads.includes('pomodoro.today') && !B.reads.includes('pomodoro.stats'), B.reads.join(' '));
+  check('...and still shows today\'s totals', B.$('#pw-today').textContent.startsWith('Today: ' + (() => { const f = allStats()[localKey(fakeNow)].focus; return f >= 3600 ? Math.floor(f / 3600) + 'h' : Math.floor(f / 60) + 'm'; })()), B.$('#pw-today').textContent);
+  writes.length = 0;
+  before = todayStats();
+  B.$('#pw-play').click();
+  fakeNow += 20000;
+  await until(() => writes.includes('pomodoro.today'), 3000);
+  B.$('#pw-play').click();
+  check('crediting focus time writes only today\'s record', writes.includes('pomodoro.today') && !writes.includes('pomodoro.stats'), writes.join(' '));
+  check('...with nothing lost', todayStats().focus - before.focus === 20, todayStats().focus - before.focus);
+  B.reads.length = 0;
+  B.$('#pw-task').dispatchEvent(new B.w.Event('focus'));
+  check('the history is fetched when autocomplete needs it', B.reads.includes('pomodoro.stats'));
+  B.reads.length = 0;
+  B.$('[data-act="stats"]').click();
+  B.$('[data-act="back"]').click();
+  check('...and only once', !B.reads.includes('pomodoro.stats'), B.reads.join(' '));
+
+  // Day rollover in a tab that stays open: yesterday moves into the history.
+  const dayBefore = localKey(fakeNow);
+  const focusBefore2 = allStats()[dayBefore].focus;
+  writes.length = 0;
+  B.$('#pw-play').click();
+  fakeNow += 24 * 3600000;
+  B.$('#pw-play').click();
+  const history = JSON.parse(store.get('pomodoro.stats'));
+  const rec = JSON.parse(store.get('pomodoro.today'));
+  check('after midnight the record is for the new day', rec.key === localKey(fakeNow), rec.key);
+  check('the previous day is folded into the history, intact', history[dayBefore] && history[dayBefore].focus >= focusBefore2, JSON.stringify(history[dayBefore]));
+  B.$('[data-act="reset"]').click();
+
+  // Updating from the single-value layout: today only exists in the history.
+  store.delete('pomodoro.today');
+  store.set('pomodoro.stats', JSON.stringify({ [localKey(fakeNow)]: { focus: 300, rounds: 1, tasks: { Legacy: 300 } }, [dayBefore]: { focus: 60, rounds: 0, tasks: { Old: 60 } } }));
+  const G = await boot();
+  check('a pre-split install keeps today\'s stats', G.$('#pw-today').textContent === 'Today: 5m focused · 1 rounds', G.$('#pw-today').textContent);
+  check('...and gets a today record', JSON.parse(store.get('pomodoro.today')).day.focus === 300, store.get('pomodoro.today'));
+  check('...without losing older days', JSON.parse(store.get('pomodoro.stats'))[dayBefore].focus === 60);
+
+  section('Settings are cached off the keypress path');
+  await sleep(30);
+  A.reads.length = 0;
+  for (let i = 0; i < 6; i++) A.w.document.body.dispatchEvent(new A.w.KeyboardEvent('keydown', { bubbles: true, ctrlKey: true, code: 'KeyC', key: 'c' }));
+  check('a background tab reads settings at most once for many shortcuts', A.reads.filter(k => k === 'pomodoro.settings').length <= 1, A.reads.join(' '));
+  G.$('[data-act="settings"]').click();
+  G.$('#pw-hotkey').click();
+  G.$('#pw-hotkey').dispatchEvent(new G.w.KeyboardEvent('keydown', { bubbles: true, composed: true, cancelable: true, ctrlKey: true, altKey: true, code: 'KeyJ', key: 'j' }));
+  A.w.document.body.dispatchEvent(new A.w.KeyboardEvent('keydown', { bubbles: true, cancelable: true, ctrlKey: true, altKey: true, code: 'KeyJ', key: 'j' }));
+  await sleep(30);
+  check('...but picks up a hotkey changed in another tab', !A.$('#pw-tab').classList.contains('hidden') && A.$('#pw-card').classList.contains('hidden'), A.reads.join(' '));
+  A.$('#pw-tab').click(); // the hotkey hid the widget; show it again
+  A.$('[data-act="settings"]').click();
+  A.$('#pw-reset-settings').click();
+  A.$('[data-act="back"]').click();
+
+  section('No wakes when nothing is on screen');
+  const realSetTimeout = A.w.setTimeout;
+  const delays = [];
+  A.w.setTimeout = (fn, ms, ...rest) => { delays.push(ms); return realSetTimeout(fn, ms, ...rest); };
+  A.$('[data-act="reset"]').click();
+  A.$('#pw-play').click();
+  check('a visible clock wakes every second', delays[delays.length - 1] <= 1000, String(delays[delays.length - 1]));
+  A.$('[data-act="settings"]').click();
+  A.$('#pw-tgl-titleTimer').checked = false;
+  A.$('#pw-tgl-titleTimer').dispatchEvent(new A.w.Event('change'));
+  A.$('[data-act="back"]').click();
+  check('...still, while the widget shows it', delays[delays.length - 1] <= 1000, String(delays[delays.length - 1]));
+  A.$('[data-act="hide"]').click();
+  check('hidden widget + no title countdown → one wake at the phase end', delays[delays.length - 1] === 25 * 60000, String(delays[delays.length - 1]));
+  A.$('#pw-tab').click();
+  check('showing the widget resumes the per-second wakes', delays[delays.length - 1] <= 1000, String(delays[delays.length - 1]));
+  check('...with the right time', A.$('#pw-time').textContent === '25:00', A.$('#pw-time').textContent);
+  A.w.setTimeout = realSetTimeout;
+  A.$('[data-act="settings"]').click();
+  A.$('#pw-reset-settings').click();
+  A.$('[data-act="back"]').click();
+  A.$('[data-act="reset"]').click();
+
   section('Corrupt / hostile storage is sanitised');
-  const dk = Object.keys(JSON.parse(store.get('pomodoro.stats'))).sort().pop();
+  const dk = localKey(fakeNow);
+  const yk = localKey(fakeNow - 86400000);
   store.set('pomodoro.settings', JSON.stringify({ focusMin: 'abc', shortMin: -3, rounds: 999, sound: 'yes', theme: 5, hotkey: 'k', chime: '<x>', excluded: 'nope', volume: 1e9 }));
   store.set('pomodoro.ui', JSON.stringify({ mode: 'weird', hidden: 'no', pos: { left: 'x', top: 5 } }));
   store.set('pomodoro.state', JSON.stringify({ phase: 'focus', round: 50, running: false, duration: 'NaN', remaining: null }));
+  store.set('pomodoro.today', JSON.stringify({ key: dk, day: { focus: '<img src=x onerror=alert(1)>', rounds: 2, tasks: { '<b>t</b>': 30, '<img src=x>': '<img src=x>', ok: 60 } } }));
   store.set('pomodoro.stats', JSON.stringify({
-    [dk]: { focus: '<img src=x onerror=alert(1)>', rounds: 2, tasks: { '<b>t</b>': 30, '<img src=x>': '<img src=x>', ok: 60 } },
+    [yk]: { focus: '<img src=x onerror=alert(1)>', rounds: 'x', tasks: 'nope' },
     'not-a-date': { focus: 1 },
   }));
   const E = await boot();

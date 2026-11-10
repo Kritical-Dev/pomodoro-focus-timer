@@ -9,7 +9,7 @@ const {
   DEFAULT_SETTINGS, MAX_PHASE_MS,
   dkey, fmtClock, fmtMinutes, fmtHuman,
   validHotkey, hotkeyFromEvent, hotkeyLabel, normalizeHost, hostExcluded,
-  loadSettings, loadStats, loadUi, loadState,
+  loadSettings, loadStats, loadToday, loadUi, loadState,
   durationFor, freshState, nextPhase, nextWakeDelay,
   splitByDay, creditFocus, recentTasks, buildTitle,
   csvCell, statsToCsv, statsToJson, parseImport, mergeStats,
@@ -168,15 +168,30 @@ test('phase order', () => {
 });
 
 test('wake scheduling', () => {
-  const now = 1_000_000_250;
-  assert.equal(nextWakeDelay(now, now - 1, false, true), 0, 'overdue → immediately');
-  assert.equal(nextWakeDelay(now, now + 10 * MIN, false, true), 1000, 'visible, on a whole second → a full second');
-  assert.equal(nextWakeDelay(now, now + 10 * MIN + 400, false, true), 400, 'visible → when the displayed second changes');
-  assert.equal(nextWakeDelay(now, now + 300, false, true), 300, 'never past the phase end');
-  assert.equal(nextWakeDelay(now, now + 10 * MIN + 5000, true, true), 5000, 'hidden → next whole minute remaining');
-  assert.equal(nextWakeDelay(now, now + 10 * MIN, true, true), MIN, 'exactly on a minute → a full minute');
-  assert.equal(nextWakeDelay(now, now + 20000, true, true), 20000, 'last partial minute → the end');
-  assert.equal(nextWakeDelay(now, now + 10 * MIN, true, false), 10 * MIN, 'hidden without title → only the end');
+  assert.equal(nextWakeDelay(-1, 'seconds'), 0, 'overdue → immediately');
+  assert.equal(nextWakeDelay(0, 'none'), 0);
+  assert.equal(nextWakeDelay(10 * MIN, 'seconds'), 1000, 'on a whole second → a full second');
+  assert.equal(nextWakeDelay(10 * MIN + 400, 'seconds'), 400, 'when the displayed second changes');
+  assert.equal(nextWakeDelay(300, 'seconds'), 300, 'never past the phase end');
+  assert.equal(nextWakeDelay(10 * MIN + 5000, 'minutes'), 5000, 'next whole minute remaining');
+  assert.equal(nextWakeDelay(10 * MIN, 'minutes'), MIN, 'exactly on a minute → a full minute');
+  assert.equal(nextWakeDelay(20000, 'minutes'), 20000, 'last partial minute → the end');
+  assert.equal(nextWakeDelay(10 * MIN, 'none'), 10 * MIN, 'nothing on screen → only the end');
+});
+
+test('loadToday', () => {
+  assert.equal(loadToday(null, NOON), null);
+  assert.equal(loadToday({ key: 5, day: {} }, NOON), null);
+  assert.equal(loadToday({ key: '__proto__', day: { focus: 5 } }, NOON), null);
+  assert.equal(loadToday({ key: 'not-a-date', day: { focus: 5 } }, NOON), null);
+  assert.equal(loadToday({ key: '2026-03-10', day: 'junk' }, NOON), null);
+  assert.equal(loadToday({ key: '2020-01-01', day: { focus: 5 } }, NOON), null, 'older than the retention window');
+  const t = loadToday({ key: '2026-03-10', day: { focus: '9', rounds: 2.2, tasks: { a: 3, b: '<img>' } }, extra: 1 }, NOON);
+  assert.equal(t.key, '2026-03-10');
+  assert.equal(t.day.focus, 0);
+  assert.equal(t.day.rounds, 2);
+  assert.deepEqual(Object.keys(t.day.tasks), ['a']);
+  assert.equal(Object.getPrototypeOf(t.day.tasks), null);
 });
 
 test('splitByDay cuts at local midnight', () => {
