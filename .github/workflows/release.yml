@@ -1,0 +1,41 @@
+name: release
+
+# Pushing a tag like v2.0.0 publishes a GitHub release with the userscript
+# attached and that version's CHANGELOG section as the notes.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Tag must match package.json and the built userscript
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != package.json v$version"; exit 1; }
+          npm run build
+          git diff --exit-code -- pomodoro.user.js
+          grep -q "^// @version      $version$" pomodoro.user.js
+
+      - run: npm run test:all
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "no CHANGELOG section for $version"; exit 1; }
+          gh release create "$GITHUB_REF_NAME" pomodoro.user.js --title "$GITHUB_REF_NAME" --notes-file notes.md

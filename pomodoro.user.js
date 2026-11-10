@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Pomodoro Focus Timer
 // @namespace    github.com/Kritical-Dev/pomodoro-focus-timer
-// @version      1.4.0
-// @description  A modern, customizable Pomodoro timer with per-task and daily focus tracking. Draggable widget, tab-title countdown, cross-tab single instance.
+// @version      2.0.0
+// @description  A modern, customizable Pomodoro timer with per-task and daily focus tracking, goals and stats export. Draggable widget, tab-title countdown, cross-tab single instance.
 // @author       KriticalDev
 // @homepageURL  https://github.com/Kritical-Dev/pomodoro-focus-timer
 // @supportURL   https://github.com/Kritical-Dev/pomodoro-focus-timer/issues
@@ -26,15 +26,342 @@
   // Only run in the top frame — one widget per tab.
   if (window.top !== window.self) return;
 
-  // Inlined at build time (see build.mjs) — compiled Tailwind CSS.
-  const TAILWIND_CSS = "*,:after,:before{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/*! tailwindcss v3.4.13 | MIT License | https://tailwindcss.com*/*,:after,:before{box-sizing:border-box;border:0 solid #e5e7eb}:after,:before{--tw-content:\"\"}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;-o-tab-size:4;tab-size:4;font-family:ui-sans-serif,system-ui,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0}fieldset,legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::-moz-placeholder,textarea::-moz-placeholder{opacity:1;color:#9ca3af}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]{display:none}.pw-iconbtn{border-radius:8px;padding:6px;--tw-text-opacity:1;color:rgb(148 163 184/var(--tw-text-opacity));transition-property:color,background-color,border-color,text-decoration-color,fill,stroke;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.pw-iconbtn:hover{background-color:rgba(51,65,85,.7);--tw-text-opacity:1;color:rgb(241 245 249/var(--tw-text-opacity))}.pw-ctl{display:flex;height:44px;width:44px;align-items:center;justify-content:center;border-radius:9999px;--tw-bg-opacity:1;background-color:rgb(30 41 59/var(--tw-bg-opacity));--tw-text-opacity:1;color:rgb(203 213 225/var(--tw-text-opacity));transition-property:color,background-color,border-color,text-decoration-color,fill,stroke;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.pw-ctl:hover{--tw-bg-opacity:1;background-color:rgb(51 65 85/var(--tw-bg-opacity));--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity))}.pw-stepbtn{display:flex;height:28px;width:28px;align-items:center;justify-content:center;border-radius:6px;background-color:rgba(51,65,85,.7);--tw-text-opacity:1;color:rgb(203 213 225/var(--tw-text-opacity));transition-property:color,background-color,border-color,text-decoration-color,fill,stroke;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.pw-stepbtn:hover{--tw-bg-opacity:1;background-color:rgb(71 85 105/var(--tw-bg-opacity));--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity))}.pw-label{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;--tw-text-opacity:1;color:rgb(148 163 184/var(--tw-text-opacity))}.pw-num{-webkit-appearance:textfield;appearance:textfield;-moz-appearance:textfield}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}.static{position:static}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.inset-0{inset:0}.bottom-0{bottom:0}.left-4{left:16px}.mx-auto{margin-left:auto;margin-right:auto}.my-3{margin-top:12px}.mb-3,.my-3{margin-bottom:12px}.ml-2{margin-left:8px}.mt-0\\.5{margin-top:2px}.mt-1{margin-top:4px}.mt-1\\.5{margin-top:6px}.mt-2{margin-top:8px}.mt-3{margin-top:12px}.flex{display:flex}.grid{display:grid}.hidden{display:none}.h-14{height:56px}.h-2{height:8px}.h-24{height:96px}.h-4{height:16px}.h-44{height:176px}.h-5{height:20px}.h-7{height:28px}.h-\\[18px\\]{height:18px}.h-full{height:100%}.max-h-32{max-height:128px}.w-11{width:44px}.w-14{width:56px}.w-2{width:8px}.w-4{width:16px}.w-44{width:176px}.w-5{width:20px}.w-7{width:28px}.w-9{width:36px}.w-\\[18px\\]{width:18px}.w-\\[290px\\]{width:290px}.w-full{width:100%}.flex-1{flex:1 1 0%}.shrink{flex-shrink:1}.shrink-0{flex-shrink:0}.-rotate-90{--tw-rotate:-90deg;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.cursor-move{cursor:move}.cursor-pointer{cursor:pointer}.select-none{-webkit-user-select:none;-moz-user-select:none;user-select:none}.select-text{-webkit-user-select:text;-moz-user-select:text;user-select:text}.resize{resize:both}.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.flex-col{flex-direction:column}.items-end{align-items:flex-end}.items-center{align-items:center}.justify-end{justify-content:flex-end}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1{gap:4px}.gap-1\\.5{gap:6px}.gap-2{gap:8px}.gap-3{gap:12px}.space-y-1>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(4px*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(4px*var(--tw-space-y-reverse))}.space-y-2>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(8px*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(8px*var(--tw-space-y-reverse))}.space-y-2\\.5>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(10px*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(10px*var(--tw-space-y-reverse))}.overflow-hidden{overflow:hidden}.overflow-y-auto{overflow-y:auto}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rounded{border-radius:4px}.rounded-2xl{border-radius:16px}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:8px}.rounded-md{border-radius:6px}.rounded-xl{border-radius:12px}.rounded-t{border-top-left-radius:4px;border-top-right-radius:4px}.rounded-t-lg{border-top-left-radius:8px;border-top-right-radius:8px}.border{border-width:1px}.border-b{border-bottom-width:1px}.border-b-0{border-bottom-width:0}.border-t{border-top-width:1px}.border-slate-700\\/60{border-color:rgba(51,65,85,.6)}.border-slate-700\\/70{border-color:rgba(51,65,85,.7)}.border-slate-800{--tw-border-opacity:1;border-color:rgb(30 41 59/var(--tw-border-opacity))}.bg-emerald-500{--tw-bg-opacity:1;background-color:rgb(16 185 129/var(--tw-bg-opacity))}.bg-emerald-500\\/15{background-color:rgba(16,185,129,.15)}.bg-rose-500{--tw-bg-opacity:1;background-color:rgb(244 63 94/var(--tw-bg-opacity))}.bg-rose-500\\/15{background-color:rgba(244,63,94,.15)}.bg-sky-500{--tw-bg-opacity:1;background-color:rgb(14 165 233/var(--tw-bg-opacity))}.bg-sky-500\\/15{background-color:rgba(14,165,233,.15)}.bg-slate-600{--tw-bg-opacity:1;background-color:rgb(71 85 105/var(--tw-bg-opacity))}.bg-slate-700{--tw-bg-opacity:1;background-color:rgb(51 65 85/var(--tw-bg-opacity))}.bg-slate-800\\/40{background-color:rgba(30,41,59,.4)}.bg-slate-800\\/70{background-color:rgba(30,41,59,.7)}.bg-slate-900{--tw-bg-opacity:1;background-color:rgb(15 23 42/var(--tw-bg-opacity))}.stroke-emerald-500{stroke:#10b981}.stroke-rose-500{stroke:#f43f5e}.stroke-sky-500{stroke:#0ea5e9}.stroke-slate-700\\/50{stroke:rgba(51,65,85,.5)}.p-2{padding:8px}.p-2\\.5{padding:10px}.px-2\\.5{padding-left:10px;padding-right:10px}.px-3{padding-left:12px;padding-right:12px}.px-3\\.5{padding-left:14px;padding-right:14px}.px-4{padding-left:16px;padding-right:16px}.py-0\\.5{padding-top:2px;padding-bottom:2px}.py-1\\.5{padding-top:6px;padding-bottom:6px}.py-2{padding-top:8px;padding-bottom:8px}.pb-4{padding-bottom:16px}.pr-0\\.5{padding-right:2px}.pt-2{padding-top:8px}.pt-3{padding-top:12px}.text-center{text-align:center}.font-sans{font-family:ui-sans-serif,system-ui,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji}.text-3xl{font-size:30px;line-height:36px}.text-\\[11px\\]{font-size:11px}.text-\\[12px\\]{font-size:12px}.text-\\[13px\\]{font-size:13px}.text-\\[9px\\]{font-size:9px}.text-base{font-size:16px;line-height:24px}.text-lg{font-size:18px;line-height:28px}.text-sm{font-size:14px;line-height:20px}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-semibold{font-weight:600}.tabular-nums{--tw-numeric-spacing:tabular-nums;font-variant-numeric:var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction)}.leading-none{line-height:1}.leading-normal{line-height:1.5}.leading-relaxed{line-height:1.625}.tracking-normal{letter-spacing:0}.tracking-tight{letter-spacing:-.025em}.tracking-wide{letter-spacing:.025em}.text-emerald-400{--tw-text-opacity:1;color:rgb(52 211 153/var(--tw-text-opacity))}.text-rose-400{--tw-text-opacity:1;color:rgb(251 113 133/var(--tw-text-opacity))}.text-sky-400{--tw-text-opacity:1;color:rgb(56 189 248/var(--tw-text-opacity))}.text-slate-100{--tw-text-opacity:1;color:rgb(241 245 249/var(--tw-text-opacity))}.text-slate-200{--tw-text-opacity:1;color:rgb(226 232 240/var(--tw-text-opacity))}.text-slate-300{--tw-text-opacity:1;color:rgb(203 213 225/var(--tw-text-opacity))}.text-slate-400{--tw-text-opacity:1;color:rgb(148 163 184/var(--tw-text-opacity))}.text-slate-50{--tw-text-opacity:1;color:rgb(248 250 252/var(--tw-text-opacity))}.text-slate-500{--tw-text-opacity:1;color:rgb(100 116 139/var(--tw-text-opacity))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity))}.antialiased{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.placeholder-slate-500::-moz-placeholder{--tw-placeholder-opacity:1;color:rgb(100 116 139/var(--tw-placeholder-opacity))}.placeholder-slate-500::placeholder{--tw-placeholder-opacity:1;color:rgb(100 116 139/var(--tw-placeholder-opacity))}.shadow-2xl{--tw-shadow:0 25px 50px -12px rgba(0,0,0,.25);--tw-shadow-colored:0 25px 50px -12px var(--tw-shadow-color)}.shadow-2xl,.shadow-lg{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-lg{--tw-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color),0 4px 6px -4px var(--tw-shadow-color)}.shadow-xl{--tw-shadow:0 20px 25px -5px rgba(0,0,0,.1),0 8px 10px -6px rgba(0,0,0,.1);--tw-shadow-colored:0 20px 25px -5px var(--tw-shadow-color),0 8px 10px -6px var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-black\\/40{--tw-shadow-color:rgba(0,0,0,.4);--tw-shadow:var(--tw-shadow-colored)}.shadow-black\\/50{--tw-shadow-color:rgba(0,0,0,.5);--tw-shadow:var(--tw-shadow-colored)}.shadow-emerald-500\\/30{--tw-shadow-color:rgba(16,185,129,.3);--tw-shadow:var(--tw-shadow-colored)}.shadow-rose-500\\/30{--tw-shadow-color:rgba(244,63,94,.3);--tw-shadow:var(--tw-shadow-colored)}.shadow-sky-500\\/30{--tw-shadow-color:rgba(14,165,233,.3);--tw-shadow:var(--tw-shadow-colored)}.outline-none{outline:2px solid transparent;outline-offset:2px}.blur{--tw-blur:blur(8px);filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.transition-colors{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.pw-num::-webkit-inner-spin-button,.pw-num::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}#pw-tasks::-webkit-scrollbar{width:6px}#pw-tasks::-webkit-scrollbar-thumb{background:rgba(71,85,105,.7);border-radius:9999px}#pw-tasks::-webkit-scrollbar-track{background:transparent}#pw-wrap button:focus-visible,#pw-wrap input:focus-visible{outline:2px solid rgba(148,163,184,.9);outline-offset:2px}@media (prefers-reduced-motion:reduce){#pw-wrap *,#pw-wrap :after,#pw-wrap :before{transition-duration:.01ms!important;animation-duration:.01ms!important}#pw-wrap button:hover{transform:none!important}}.after\\:absolute:after{content:var(--tw-content);position:absolute}.after\\:left-0\\.5:after{content:var(--tw-content);left:2px}.after\\:top-0\\.5:after{content:var(--tw-content);top:2px}.after\\:h-4:after{content:var(--tw-content);height:16px}.after\\:w-4:after{content:var(--tw-content);width:16px}.after\\:rounded-full:after{content:var(--tw-content);border-radius:9999px}.after\\:bg-slate-400:after{content:var(--tw-content);--tw-bg-opacity:1;background-color:rgb(148 163 184/var(--tw-bg-opacity))}.after\\:transition-all:after{content:var(--tw-content);transition-property:all;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.hover\\:scale-105:hover{--tw-scale-x:1.05;--tw-scale-y:1.05;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.hover\\:bg-emerald-400:hover{--tw-bg-opacity:1;background-color:rgb(52 211 153/var(--tw-bg-opacity))}.hover\\:bg-rose-400:hover{--tw-bg-opacity:1;background-color:rgb(251 113 133/var(--tw-bg-opacity))}.hover\\:bg-sky-400:hover{--tw-bg-opacity:1;background-color:rgb(56 189 248/var(--tw-bg-opacity))}.hover\\:bg-slate-800:hover{--tw-bg-opacity:1;background-color:rgb(30 41 59/var(--tw-bg-opacity))}.hover\\:bg-slate-800\\/70:hover{background-color:rgba(30,41,59,.7)}.hover\\:text-slate-100:hover{--tw-text-opacity:1;color:rgb(241 245 249/var(--tw-text-opacity))}.focus\\:border-rose-500\\/60:focus{border-color:rgba(244,63,94,.6)}.peer:checked~.peer-checked\\:bg-emerald-500{--tw-bg-opacity:1;background-color:rgb(16 185 129/var(--tw-bg-opacity))}.peer:checked~.peer-checked\\:after\\:translate-x-4:after{content:var(--tw-content);--tw-translate-x:16px;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.peer:checked~.peer-checked\\:after\\:bg-white:after{content:var(--tw-content);--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity))}";
+  // Generated by build.mjs from src/ — edit the sources, not this file.
+  const STYLES = "*,*::before,*::after{box-sizing: border-box}#pw-wrap{--bg: #0f172a;--panel: #1e293b;--panel-hover: #334155;--line: #334155;--text: #f1f5f9;--soft: #cbd5e1;--muted: #94a3b8;--dim: #64748b;--track: rgb(51 65 85 / 0.5);--shadow: rgb(0 0 0 / 0.5);--accent: #f43f5e;--accent-hover: #fb7185;--accent-soft: rgb(244 63 94 / 0.15);--ok: #10b981;--danger: #ef4444;font: 14px/1.5 ui-sans-serif,system-ui,-apple-system,\"Segoe UI\",Roboto,\"Helvetica Neue\",Arial,sans-serif;letter-spacing: normal;color: var(--text);user-select: none;-webkit-font-smoothing: antialiased}#pw-wrap[data-theme=\"light\"]{--bg: #ffffff;--panel: #f1f5f9;--panel-hover: #e2e8f0;--line: #cbd5e1;--text: #0f172a;--soft: #334155;--muted: #475569;--dim: #64748b;--track: rgb(148 163 184 / 0.35);--shadow: rgb(15 23 42 / 0.25)}@media (prefers-color-scheme: light){#pw-wrap[data-theme=\"auto\"]{--bg: #ffffff;--panel: #f1f5f9;--panel-hover: #e2e8f0;--line: #cbd5e1;--text: #0f172a;--soft: #334155;--muted: #475569;--dim: #64748b;--track: rgb(148 163 184 / 0.35);--shadow: rgb(15 23 42 / 0.25)}}#pw-wrap[data-phase=\"short\"]{--accent: #10b981;--accent-hover: #34d399;--accent-soft: rgb(16 185 129 / 0.15)}#pw-wrap[data-phase=\"long\"]{--accent: #0ea5e9;--accent-hover: #38bdf8;--accent-soft: rgb(14 165 233 / 0.15)}.hidden{display: none !important}button,input,select{font: inherit;color: inherit;margin: 0}button{border: 0;padding: 0;background: none;cursor: pointer}svg{display: block;fill: currentColor}#pw-card{width: 290px;overflow: hidden;border: 1px solid var(--line);border-radius: 16px;background: var(--bg);box-shadow: 0 25px 50px -12px var(--shadow)}#pw-header{display: flex;align-items: center;gap: 4px;padding: 8px 12px;border-bottom: 1px solid var(--panel);cursor: move}.pw-logo{font-size: 16px;line-height: 1}.pw-title{flex: 1;font-size: 13px;font-weight: 600;letter-spacing: 0.025em;color: var(--soft)}.pw-view{padding: 12px 16px 16px}.pw-scroll{max-height: min(430px,calc(100vh - 170px));min-height: 60px;margin-right: -8px;padding-right: 8px;overflow-y: auto}.pw-iconbtn{padding: 6px;border-radius: 8px;color: var(--muted);transition: background-color 0.15s,color 0.15s}.pw-iconbtn:hover{background: var(--panel-hover);color: var(--text)}.pw-iconbtn svg{width: 18px;height: 18px}.pw-iconbtn.armed{background: var(--danger);color: #fff}.pw-row{display: flex;align-items: center;justify-content: space-between;gap: 8px}#pw-phase{padding: 2px 10px;border-radius: 999px;font-size: 11px;font-weight: 600;background: var(--accent-soft);color: var(--accent)}.pw-rounds{display: flex;align-items: center;gap: 6px;font-size: 11px;font-weight: 500;color: var(--muted)}#pw-dots{display: flex;gap: 3px}#pw-dots i{width: 6px;height: 6px;border-radius: 50%;background: var(--track)}#pw-dots i.done{background: var(--accent)}#pw-dots i.now{box-shadow: 0 0 0 1.5px var(--accent)}.pw-dial{position: relative;width: 176px;height: 176px;margin: 12px auto}.pw-dial svg{width: 176px;height: 176px;transform: rotate(-90deg);fill: none}.pw-dial circle{stroke-width: 8;stroke: var(--track)}#pw-ring{stroke: var(--accent);stroke-linecap: round}.pw-dial-text{position: absolute;inset: 0;display: flex;flex-direction: column;align-items: center;justify-content: center}#pw-time{font-size: 30px;line-height: 36px;font-weight: 700;letter-spacing: -0.025em;font-variant-numeric: tabular-nums}#pw-state{margin-top: 2px;font-size: 11px;font-weight: 500;color: var(--muted)}.pw-field{width: 100%;padding: 6px 12px;border: 1px solid var(--line);border-radius: 8px;background: var(--panel);font-size: 13px;outline: none;user-select: text}.pw-field::placeholder{color: var(--dim)}.pw-field:focus,.pw-num:focus,.pw-select:focus{border-color: var(--accent)}.pw-controls{display: flex;align-items: center;justify-content: center;gap: 12px;margin-top: 12px}.pw-ctl{display: flex;align-items: center;justify-content: center;width: 44px;height: 44px;border-radius: 50%;background: var(--panel);color: var(--soft);transition: background-color 0.15s,color 0.15s}.pw-ctl:hover{background: var(--panel-hover);color: var(--text)}.pw-ctl svg{width: 20px;height: 20px}#pw-play{display: flex;align-items: center;justify-content: center;width: 56px;height: 56px;border-radius: 50%;background: var(--accent);color: #fff;box-shadow: 0 10px 15px -3px var(--accent-soft);transition: background-color 0.15s,transform 0.15s}#pw-play:hover{background: var(--accent-hover);transform: scale(1.05)}#pw-play svg{width: 28px;height: 28px}.pw-link{display: block;margin: 8px auto 0;padding: 2px 8px;border-radius: 6px;font-size: 11px;font-weight: 600;color: var(--muted)}.pw-link:hover{background: var(--panel);color: var(--text)}.pw-notice{margin-top: 10px;padding: 6px 10px;border-radius: 8px;background: var(--accent-soft);color: var(--text);font-size: 12px;text-align: center}#pw-today{margin-top: 12px;padding-top: 8px;border-top: 1px solid var(--panel);text-align: center;font-size: 11px;color: var(--muted)}.pw-viewhead{display: flex;align-items: center;gap: 8px;margin-bottom: 12px}.pw-viewhead span{flex: 1;font-size: 13px;font-weight: 600;color: var(--soft)}.pw-stack>* + *{margin-top: 10px}.pw-section{margin-top: 12px;padding-top: 12px;border-top: 1px solid var(--panel)}.pw-setlabel{font-size: 13px;color: var(--soft)}.pw-stepper{display: flex;align-items: center;gap: 6px}.pw-stepbtn{display: flex;align-items: center;justify-content: center;width: 28px;height: 28px;border-radius: 6px;background: var(--panel-hover);color: var(--soft);transition: background-color 0.15s,color 0.15s}.pw-stepbtn:hover{color: var(--text)}.pw-stepbtn svg{width: 16px;height: 16px}.pw-num{width: 44px;padding: 2px 0;border: 1px solid var(--line);border-radius: 6px;background: var(--panel);font-size: 13px;font-weight: 600;text-align: center;font-variant-numeric: tabular-nums;outline: none;user-select: text;appearance: textfield;-moz-appearance: textfield}.pw-num::-webkit-outer-spin-button,.pw-num::-webkit-inner-spin-button{-webkit-appearance: none;margin: 0}.pw-select{padding: 3px 6px;border: 1px solid var(--line);border-radius: 6px;background: var(--panel);font-size: 12px;outline: none}.pw-range{width: 110px;accent-color: var(--accent)}.pw-toggle{cursor: pointer}.pw-toggle input{position: absolute;width: 1px;height: 1px;margin: -1px;overflow: hidden;clip: rect(0 0 0 0);white-space: nowrap;border: 0}.pw-switch{position: relative;flex: none;width: 36px;height: 20px;border-radius: 999px;background: var(--panel-hover);transition: background-color 0.15s}.pw-switch::after{content: \"\";position: absolute;left: 2px;top: 2px;width: 16px;height: 16px;border-radius: 50%;background: var(--muted);transition: transform 0.15s,background-color 0.15s}.pw-toggle input:checked + .pw-switch{background: var(--ok)}.pw-toggle input:checked + .pw-switch::after{transform: translateX(16px);background: #fff}.pw-toggle input:focus-visible + .pw-switch{outline: 2px solid var(--muted);outline-offset: 2px}.pw-btn{width: 100%;padding: 6px 8px;border: 1px solid var(--line);border-radius: 8px;font-size: 12px;font-weight: 500;color: var(--muted);transition: background-color 0.15s,color 0.15s}.pw-btn:hover{background: var(--panel);color: var(--text)}.pw-btnrow{display: flex;gap: 6px}.pw-kbd{width: auto;min-width: 96px;font-variant-numeric: tabular-nums}.pw-chips{display: flex;flex-wrap: wrap;gap: 4px}.pw-chip{display: flex;align-items: center;gap: 4px;max-width: 100%;padding: 1px 4px 1px 8px;border-radius: 999px;background: var(--panel);font-size: 11px;color: var(--soft)}.pw-chip span{overflow: hidden;text-overflow: ellipsis;white-space: nowrap}.pw-chip button{padding: 0 4px;border-radius: 50%;color: var(--muted)}.pw-chip button:hover{color: var(--danger)}.pw-help{margin: 8px 0 0;font-size: 11px;line-height: 1.6;color: var(--dim)}.pw-label{font-size: 11px;font-weight: 500;text-transform: uppercase;letter-spacing: 0.05em;color: var(--muted)}.pw-tiles{display: grid;grid-template-columns: 1fr 1fr;gap: 8px}.pw-tile{padding: 10px;border-radius: 12px;background: var(--panel);text-align: center}.pw-tile b{display: block;font-size: 18px;line-height: 28px;font-weight: 700}#pw-goal{margin-top: 8px}.pw-goalbar{height: 6px;border-radius: 999px;background: var(--track);overflow: hidden}.pw-goalbar i{display: block;height: 100%;width: 0;border-radius: 999px;background: var(--ok)}#pw-goal-text{margin-top: 4px;text-align: center;font-size: 11px;color: var(--muted)}#pw-chart{display: flex;align-items: flex-end;gap: 6px;height: 96px;margin-top: 4px;padding: 8px;border-radius: 12px;background: var(--panel)}.pw-col{display: flex;flex: 1;flex-direction: column;align-items: center;justify-content: flex-end;gap: 4px;height: 100%}.pw-bar{width: 100%;border-radius: 4px 4px 0 0;background: var(--dim)}.pw-col span{font-size: 9px;color: var(--dim)}.pw-col.today .pw-bar{background: var(--accent)}.pw-col.today span{font-weight: 700;color: var(--soft)}#pw-week-total{margin-top: 6px;text-align: center;font-size: 11px;color: var(--muted)}#pw-tasks{margin-top: 4px}#pw-tasks>* + *{margin-top: 4px}.pw-task{display: flex;align-items: center;justify-content: space-between;padding: 6px 10px;border-radius: 8px;background: var(--panel);font-size: 12px}.pw-task span{overflow: hidden;text-overflow: ellipsis;white-space: nowrap;color: var(--soft)}.pw-task b{flex: none;margin-left: 8px;font-weight: 600;font-variant-numeric: tabular-nums}.pw-empty{padding: 8px 10px;border-radius: 8px;background: var(--panel);text-align: center;font-size: 12px;color: var(--dim)}#pw-pill{display: flex;align-items: center;gap: 8px;padding: 6px 14px;border: 1px solid var(--line);border-radius: 999px;background: var(--bg);box-shadow: 0 20px 25px -5px var(--shadow)}#pw-pill-dot{width: 8px;height: 8px;border-radius: 50%;background: var(--accent)}#pw-pill-time{font-size: 13px;font-weight: 600;font-variant-numeric: tabular-nums}#pw-tab{position: fixed;bottom: 0;left: 16px;display: flex;align-items: center;gap: 6px;padding: 6px 12px;border: 1px solid var(--line);border-bottom: 0;border-radius: 8px 8px 0 0;background: var(--bg);color: var(--muted);font-size: 11px;font-weight: 600;letter-spacing: 0.025em;box-shadow: 0 10px 15px -3px var(--shadow);transition: background-color 0.15s,color 0.15s}#pw-tab:hover{background: var(--panel);color: var(--text)}#pw-tab svg{width: 16px;height: 16px}.pw-scroll::-webkit-scrollbar{width: 6px}.pw-scroll::-webkit-scrollbar-thumb{background: var(--dim);border-radius: 999px}.pw-scroll::-webkit-scrollbar-track{background: transparent}#pw-wrap button:focus-visible,#pw-wrap input:focus-visible,#pw-wrap select:focus-visible{outline: 2px solid var(--muted);outline-offset: 2px}@media (prefers-reduced-motion: reduce){#pw-wrap *,#pw-wrap *::before,#pw-wrap *::after{transition-duration: 0.01ms !important;animation-duration: 0.01ms !important}#pw-play:hover{transform: none !important}}";
+
+  /* ==================================================================== *
+   * Core — pure logic. No DOM, no storage, no clock reads: every function
+   * takes what it needs (including `now`) as arguments, so all of it is unit
+   * tested directly in Node (test/core.test.mjs). build.mjs inlines this file
+   * into the userscript, dropping everything below the strip marker.
+   * ==================================================================== */
+
+  const DEFAULT_SETTINGS = {
+    focusMin: 25,
+    shortMin: 5,
+    longMin: 15,
+    rounds: 4,            // focus rounds before the long break
+    goalMin: 0,           // daily focus goal in minutes (0 = off)
+    autoBreaks: true,     // auto-start breaks after a focus round
+    autoFocus: false,     // auto-start the next focus round after a break
+    sound: true,
+    volume: 70,           // chime volume, 0–100
+    chime: 'bell',
+    notify: true,
+    titleTimer: true,     // show countdown in the tab title
+    theme: 'auto',
+    hotkey: 'Alt+Shift+KeyT',
+    excluded: [],         // hostnames where the widget stays out of the way
+  };
+
+  const RANGES = {
+    focusMin: [1, 180],
+    shortMin: [1, 60],
+    longMin: [1, 120],
+    rounds: [1, 12],
+    goalMin: [0, 720],
+    volume: [0, 100],
+  };
+
+  const CHOICES = {
+    chime: ['bell', 'soft', 'digital'],
+    theme: ['auto', 'dark', 'light'],
+  };
+
+  const PHASES = {
+    focus: { label: 'Focus', icon: '🍅', setting: 'focusMin' },
+    short: { label: 'Short Break', icon: '☕', setting: 'shortMin' },
+    long: { label: 'Long Break', icon: '🌴', setting: 'longMin' },
+  };
+
+  const STATS_KEEP_DAYS = 90;
+  const TASK_MAX = 80;
+  const MAX_PHASE_MS = 240 * 60000; // a phase can be extended up to this
+  const EXTEND_MS = 5 * 60000;
+  const UNTRACKED = 'Untracked';
+
+  /* ---- small helpers ---- */
+  const finite = Number.isFinite;
+  const isObj = v => v !== null && typeof v === 'object';
+  const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const count = v => (finite(v) && v > 0 ? Math.round(v) : 0);
+  function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+  const pad2 = n => String(n).padStart(2, '0');
+
+  function dkey(ts) {
+    const d = new Date(ts);
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function fmtClock(ms) {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+    return (h > 0 ? h + ':' : '') + pad2(m) + ':' + pad2(ss);
+  }
+
+  // Coarse countdown for a backgrounded tab's title, which is only refreshed
+  // once a minute ("25m" means "no more than 25 minutes left").
+  function fmtMinutes(ms) { return Math.max(1, Math.ceil(ms / 60000)) + 'm'; }
+
+  function fmtHuman(sec) {
+    sec = Math.round(sec);
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+    if (h > 0) return h + 'h ' + pad2(m) + 'm';
+    if (m > 0) return m + 'm';
+    return sec + 's';
+  }
+
+  /* ---- hotkey ----
+   * Stored as "Ctrl+Alt+Shift+Meta+<KeyboardEvent.code>", modifiers in that
+   * order. At least one of Ctrl/Alt/Meta is required so plain typing can never
+   * be a hotkey. */
+  const HOTKEY_RE = /^(Ctrl\+)?(Alt\+)?(Shift\+)?(Meta\+)?([A-Z][A-Za-z0-9]{0,19})$/;
+  const MODIFIER_CODE_RE = /^(Control|Alt|Shift|Meta|OS)(Left|Right)?$/;
+
+  function validHotkey(str) {
+    if (typeof str !== 'string') return false;
+    const m = HOTKEY_RE.exec(str);
+    return !!m && !!(m[1] || m[2] || m[4]) && !MODIFIER_CODE_RE.test(m[5]);
+  }
+
+  function hotkeyFromEvent(e) {
+    if (!e.code || MODIFIER_CODE_RE.test(e.code)) return null;
+    const str = (e.ctrlKey ? 'Ctrl+' : '') + (e.altKey ? 'Alt+' : '') + (e.shiftKey ? 'Shift+' : '') + (e.metaKey ? 'Meta+' : '') + e.code;
+    return validHotkey(str) ? str : null;
+  }
+
+  function hotkeyLabel(str) { return str.replace(/\+(Key|Digit)(?=.$)/, '+'); }
+
+  /* ---- site exclusion ---- */
+  function normalizeHost(h) {
+    if (typeof h !== 'string') return '';
+    h = h.trim().toLowerCase().replace(/^\.+|\.+$/g, '');
+    return /^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/.test(h) ? h : '';
+  }
+
+  // A listed host also covers its subdomains.
+  function hostExcluded(host, list) {
+    host = normalizeHost(host);
+    return !!host && list.some(h => host === h || host.endsWith('.' + h));
+  }
+
+  /* ---- sanitised loading ----
+   * Everything read back from storage is untrusted (older versions, manual
+   * edits, imports, other scripts sharing localStorage). */
+  function loadSettings(raw) {
+    const s = Object.assign({}, DEFAULT_SETTINGS, { excluded: [] });
+    if (!isObj(raw)) return s;
+    for (const k of Object.keys(DEFAULT_SETTINGS)) {
+      const v = raw[k];
+      if (RANGES[k]) { if (finite(v)) s[k] = clamp(Math.round(v), RANGES[k][0], RANGES[k][1]); }
+      else if (CHOICES[k]) { if (CHOICES[k].includes(v)) s[k] = v; }
+      else if (k === 'hotkey') { if (validHotkey(v)) s[k] = v; }
+      else if (k === 'excluded') { if (Array.isArray(v)) s[k] = [...new Set(v.map(normalizeHost).filter(Boolean))].slice(0, 200); }
+      else if (typeof v === 'boolean') s[k] = v;
+    }
+    return s;
+  }
+
+  function newDay() { return { focus: 0, rounds: 0, tasks: Object.create(null) }; }
+
+  function dayEntry(stats, key) {
+    if (!stats[key]) stats[key] = newDay();
+    return stats[key];
+  }
+
+  // Task maps are null-prototype objects, so task names such as "constructor"
+  // or "__proto__" are ordinary keys instead of inherited members.
+  function loadStats(raw, now, keepDays) {
+    const out = {};
+    if (!isObj(raw)) return out;
+    const cutoff = new Date(now);
+    cutoff.setDate(cutoff.getDate() - (keepDays || STATS_KEEP_DAYS));
+    const cKey = dkey(cutoff.getTime());
+    for (const k of Object.keys(raw)) {
+      const d = raw[k];
+      if (!/^\d{4}-\d\d-\d\d$/.test(k) || k < cKey || !isObj(d)) continue;
+      const day = newDay();
+      day.focus = count(d.focus);
+      day.rounds = count(d.rounds);
+      if (isObj(d.tasks)) {
+        for (const name of Object.keys(d.tasks)) {
+          const sec = count(d.tasks[name]);
+          if (sec) day.tasks[name.slice(0, TASK_MAX)] = sec;
+        }
+      }
+      out[k] = day;
+    }
+    return out;
+  }
+
+  function loadUi(raw) {
+    const r = isObj(raw) ? raw : {};
+    const p = r.pos;
+    return {
+      mode: r.mode === 'pill' ? 'pill' : 'card',
+      hidden: r.hidden === true,
+      pos: isObj(p) && finite(p.left) && finite(p.top) ? { left: p.left, top: p.top } : null,
+    };
+  }
+
+  /* ---- timer state ----
+   * Invariant: while a focus phase runs, the focus time not yet credited to
+   * stats is exactly min(now, endsAt) - lastTick. That is pure timestamp
+   * arithmetic, so any saved copy of the state is self-consistent: a tab that
+   * is closed, frozen or loses leadership never has to write anything on the
+   * way out, and whoever loads the state next credits exactly the right
+   * amount — no loss, no double counting. */
+  function durationFor(settings, phase) { return settings[PHASES[phase].setting] * 60000; }
+
+  function freshState(settings) {
+    const d = durationFor(settings, 'focus');
+    return { phase: 'focus', round: 1, running: false, duration: d, remaining: d, endsAt: 0, task: '', lastTick: 0 };
+  }
+
+  function loadState(raw, settings, now) {
+    const s = freshState(settings);
+    if (!isObj(raw) || !own(PHASES, raw.phase)) return s;
+    s.phase = raw.phase;
+    s.round = finite(raw.round) ? clamp(Math.round(raw.round), 1, settings.rounds) : 1;
+    s.duration = finite(raw.duration) && raw.duration > 0 ? Math.min(raw.duration, MAX_PHASE_MS) : durationFor(settings, s.phase);
+    s.remaining = finite(raw.remaining) ? clamp(raw.remaining, 0, s.duration) : s.duration;
+    s.task = typeof raw.task === 'string' ? raw.task.slice(0, TASK_MAX) : '';
+    if (raw.running === true && finite(raw.endsAt)) {
+      s.running = true;
+      // A clock that was moved backwards must not stretch the phase.
+      s.endsAt = Math.min(raw.endsAt, now + s.duration);
+      s.lastTick = finite(raw.lastTick) ? clamp(raw.lastTick, s.endsAt - s.duration, now) : now;
+    }
+    return s;
+  }
+
+  // What follows the current phase: { phase, round }.
+  function nextPhase(state, settings) {
+    if (state.phase === 'focus') return { phase: state.round >= settings.rounds ? 'long' : 'short', round: state.round };
+    return { phase: 'focus', round: state.phase === 'long' ? 1 : Math.min(state.round + 1, settings.rounds) };
+  }
+
+  // When the engine should wake next (ms from now) — exactly when what is
+  // displayed is due to change, so the readout is never late:
+  //   visible            → the next whole second of remaining time
+  //   hidden, title on   → the next whole minute of remaining time (tab title)
+  //   hidden, title off  → the moment the phase ends
+  function nextWakeDelay(now, endsAt, hidden, titleTimer) {
+    const remaining = endsAt - now;
+    if (remaining <= 0) return 0;
+    if (!hidden) return (remaining % 1000) || 1000;
+    return titleTimer ? (remaining % 60000) || 60000 : remaining;
+  }
+
+  /* ---- focus-time accounting ---- */
+  // [from, to) cut at local midnights: [{ key, ms }, …]
+  function splitByDay(from, to) {
+    const segs = [];
+    for (let start = from, guard = 0; start < to && guard < 400; guard++) {
+      const d = new Date(start);
+      const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime();
+      const end = Math.min(to, midnight);
+      segs.push({ key: dkey(start), ms: end - start });
+      start = end;
+    }
+    return segs;
+  }
+
+  // Credit the focus time in [from, to) to `task`, each part on the day it
+  // happened. Whole seconds only: returns { until, sec } where `until` is how
+  // far crediting got. Mid-phase the sub-second tail is left for the next
+  // call; a `final` credit (pause, phase end) rounds it instead, so a 25-minute
+  // round is 1500 s, not 1499. A clock that moved backwards credits nothing.
+  function creditFocus(stats, task, from, to, final) {
+    if (to <= from) return { until: to, sec: 0 };
+    const name = (task || '').trim() || UNTRACKED;
+    // Seconds are counted cumulatively from `from`, so a midnight in the
+    // middle shifts at most a fraction of a second between the two days and
+    // never changes the total.
+    let ms = 0, total = 0;
+    for (const seg of splitByDay(from, to)) {
+      ms += seg.ms;
+      const sec = (final ? Math.round(ms / 1000) : Math.floor(ms / 1000)) - total;
+      if (sec > 0) {
+        const d = dayEntry(stats, seg.key);
+        d.focus += sec;
+        d.tasks[name] = (d.tasks[name] || 0) + sec;
+        total += sec;
+      }
+    }
+    return { until: final ? to : from + total * 1000, sec: total };
+  }
+
+  // Most recently used task names, newest day first, for autocomplete.
+  function recentTasks(stats, limit) {
+    const seen = new Set();
+    for (const k of Object.keys(stats).sort().reverse()) {
+      const names = Object.entries(stats[k].tasks).sort((a, b) => b[1] - a[1]);
+      for (const [name] of names) {
+        if (name !== UNTRACKED) seen.add(name);
+        if (seen.size >= limit) return [...seen];
+      }
+    }
+    return [...seen];
+  }
+
+  /* ---- tab title ---- */
+  function buildTitle(phase, timeStr, task, siteTitle) {
+    const p = PHASES[phase];
+    const t = (task || '').replace(/\s+/g, ' ').trim();
+    const shown = t.length > 40 ? t.slice(0, 39) + '…' : t; // keep the tab title readable
+    return p.icon + ' ' + timeStr + ' ' + p.label + (shown ? ' · ' + shown : '') + (siteTitle ? ' — ' + siteTitle : '');
+  }
+
+  /* ---- export / import ---- */
+  // Spreadsheet-safe: quotes are doubled, and a cell that would be read as a
+  // formula (=, +, -, @ …) is prefixed with an apostrophe.
+  function csvCell(v) {
+    let s = String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function statsToCsv(stats) {
+    const rows = ['date,task,focus_seconds,focus_minutes,rounds_that_day'];
+    for (const k of Object.keys(stats).sort()) {
+      const d = stats[k];
+      const tasks = Object.entries(d.tasks);
+      if (!tasks.length) rows.push([k, '', 0, 0, d.rounds].join(','));
+      for (const [name, sec] of tasks) rows.push([k, csvCell(name), sec, (sec / 60).toFixed(1), d.rounds].join(','));
+    }
+    return rows.join('\n') + '\n';
+  }
+
+  function statsToJson(stats, now) {
+    return JSON.stringify({ app: 'pomodoro-focus-timer', exported: new Date(now).toISOString(), stats }, null, 2);
+  }
+
+  // Accepts our JSON export (or a bare stats map). Returns sanitised stats, or
+  // null when the text is not usable.
+  function parseImport(text, now) {
+    let data;
+    try { data = JSON.parse(text); } catch (e) { return null; }
+    if (isObj(data) && isObj(data.stats)) data = data.stats;
+    const stats = loadStats(data, now);
+    return Object.keys(stats).length ? stats : null;
+  }
+
+  // Imported days replace the same days already present; returns the day count.
+  function mergeStats(into, from) {
+    const keys = Object.keys(from);
+    for (const k of keys) into[k] = from[k];
+    return keys.length;
+  }
+
+  /* ==================================================================== *
+   * Main — storage, timer engine, UI and cross-tab leadership.
+   * Inlined after core.js by build.mjs; STYLES is injected by the build.
+   * ==================================================================== */
 
   /* ------------------------------------------------------------------ *
    * Storage (GM_* with localStorage fallback)
-   *
-   * Everything read back is untrusted (older versions, manual edits, other
-   * scripts sharing localStorage), so each key goes through a load*()
-   * sanitiser below before it is used.
+   * Values read back are untrusted and always pass through core's load*().
    * ------------------------------------------------------------------ */
   const store = {
     get(key) {
@@ -54,145 +381,56 @@
     },
   };
 
-  /* ------------------------------------------------------------------ *
-   * Settings & constants
-   * ------------------------------------------------------------------ */
-  const DEFAULT_SETTINGS = {
-    focusMin: 25,
-    shortMin: 5,
-    longMin: 15,
-    rounds: 4,          // focus rounds before the long break
-    autoBreaks: true,   // auto-start breaks after a focus round
-    autoFocus: false,   // auto-start the next focus round after a break
-    sound: true,
-    notify: true,
-    titleTimer: true,   // show countdown in the tab title
-  };
+  const KEYS = { state: 'pomodoro.state', settings: 'pomodoro.settings', stats: 'pomodoro.stats', ui: 'pomodoro.ui', leader: 'pomodoro.leader' };
+  const RING_LEN = 2 * Math.PI * 54; // r=54 viewBox circle
+  const FLUSH_MS = 15000; // credit focus time to stats at least this often (keeps "Today" live)
 
-  const RANGES = {
-    focusMin: [1, 180],
-    shortMin: [1, 60],
-    longMin: [1, 120],
-    rounds: [1, 12],
-  };
-
+  // [key, label, step]
   const SETTING_ROWS = [
-    ['focusMin', 'Focus duration (min)'],
-    ['shortMin', 'Short break (min)'],
-    ['longMin', 'Long break (min)'],
-    ['rounds', 'Rounds per cycle'],
+    ['focusMin', 'Focus duration (min)', 1],
+    ['shortMin', 'Short break (min)', 1],
+    ['longMin', 'Long break (min)', 1],
+    ['rounds', 'Rounds per cycle', 1],
+    ['goalMin', 'Daily goal (min)', 15], // 0 = off
   ];
 
   const TOGGLES = [
     ['autoBreaks', 'Auto-start breaks'],
     ['autoFocus', 'Auto-start focus rounds'],
-    ['sound', 'Completion sound'],
     ['notify', 'Notifications'],
     ['titleTimer', 'Show timer in tab title'],
+    ['sound', 'Completion sound'],
   ];
 
-  // Full literal class names so the Tailwind compiler picks them up.
-  const PHASES = {
-    focus: {
-      label: 'Focus', icon: '🍅', setting: 'focusMin',
-      ring: 'stroke-rose-500',
-      badge: 'bg-rose-500/15 text-rose-400',
-      play: 'bg-rose-500 hover:bg-rose-400 shadow-rose-500/30',
-      dot: 'bg-rose-500',
-    },
-    short: {
-      label: 'Short Break', icon: '☕', setting: 'shortMin',
-      ring: 'stroke-emerald-500',
-      badge: 'bg-emerald-500/15 text-emerald-400',
-      play: 'bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/30',
-      dot: 'bg-emerald-500',
-    },
-    long: {
-      label: 'Long Break', icon: '🌴', setting: 'longMin',
-      ring: 'stroke-sky-500',
-      badge: 'bg-sky-500/15 text-sky-400',
-      play: 'bg-sky-500 hover:bg-sky-400 shadow-sky-500/30',
-      dot: 'bg-sky-500',
-    },
-  };
-
-  const RING_LEN = 2 * Math.PI * 54; // r=54 viewBox circle
-  const FLUSH_MS = 15000; // credit focus time to stats at least this often (keeps "Today" live)
-  const STATS_KEEP_DAYS = 14;
-  const TASK_MAX = 80;
-  const KEYS = { state: 'pomodoro.state', settings: 'pomodoro.settings', stats: 'pomodoro.stats', ui: 'pomodoro.ui', leader: 'pomodoro.leader' };
+  const SELECTS = [
+    ['chime', 'Chime', [['bell', 'Bell'], ['soft', 'Soft'], ['digital', 'Digital']]],
+    ['theme', 'Theme', [['auto', 'Match system'], ['dark', 'Dark'], ['light', 'Light']]],
+  ];
 
   // Defaults only. Nothing is read from storage at load time — these are
   // filled in by reloadSharedState() when (and only when) this tab becomes
-  // the leader, so a non-leader tab performs zero storage reads and zero DOM
-  // work for the lifetime of the page.
-  let settings = Object.assign({}, DEFAULT_SETTINGS);
+  // the leader, so a background tab performs zero storage reads and zero DOM
+  // work until it is looked at.
+  let settings = loadSettings(null);
   let stats = {};
-  let ui = { mode: 'card', hidden: false, pos: null };
-
-  /* ------------------------------------------------------------------ *
-   * Runtime state
-   *
-   * Invariant: the focus time not yet credited to `stats` is always
-   * pendingFocusMs + (min(now, endsAt) - lastTick) while a focus phase runs.
-   * Because that is pure timestamp arithmetic, any saved copy of S is
-   * self-consistent: a tab that is closed, frozen or loses leadership never
-   * has to write anything on the way out, and whoever loads S next credits
-   * exactly the right amount — no loss, no double counting.
-   * ------------------------------------------------------------------ */
-  function durationFor(phase) { return settings[PHASES[phase].setting] * 60000; }
-
-  function freshState() {
-    const d = durationFor('focus');
-    return {
-      phase: 'focus', round: 1, running: false,
-      duration: d, remaining: d, endsAt: 0,
-      task: '', pendingFocusMs: 0, lastTick: 0,
-    };
-  }
-
-  let S = freshState();
+  let ui = loadUi(null);
+  let S = freshState(settings);
 
   function saveState() { store.set(KEYS.state, S); }
   function saveSettings() { store.set(KEYS.settings, settings); }
   function saveStats() { store.set(KEYS.stats, stats); }
   function saveUi() { store.set(KEYS.ui, ui); }
 
-  /* ------------------------------------------------------------------ *
-   * Helpers
-   * ------------------------------------------------------------------ */
-  function dkey(d) {
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  }
-  function todayKey() { return dkey(new Date()); }
+  const HOST = normalizeHost(location.hostname);
 
-  function fmtClock(ms) {
-    const s = Math.max(0, Math.ceil(ms / 1000));
-    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
-    if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
-    return String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
-  }
-
-  function fmtHuman(sec) {
-    sec = Math.round(sec);
-    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
-    if (h > 0) return h + 'h ' + String(m).padStart(2, '0') + 'm';
-    if (m > 0) return m + 'm';
-    return sec + 's';
-  }
-
-  function esc(str) {
-    return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  }
-
-  function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
-  const isObj = v => v !== null && typeof v === 'object';
-  const finite = Number.isFinite;
-  const count = v => (finite(v) && v > 0 ? Math.round(v) : 0);
+  // Settings as they are right now, without requiring this tab to lead.
+  function liveSettings() { return isLeader ? settings : loadSettings(store.get(KEYS.settings)); }
+  function excludedHere() { return hostExcluded(HOST, liveSettings().excluded); }
 
   // Pages that enforce Trusted Types (YouTube, Gmail, …) reject plain strings
-  // assigned to innerHTML. Every markup string we assign is static or built
-  // with esc(), so an identity policy is safe; it is created on first use.
+  // assigned to innerHTML. Only static markup defined in this file is ever
+  // assigned (user data always goes through textContent), so an identity
+  // policy is safe; it is created on first use.
   let ttPolicy;
   function setHTML(node, html) {
     if (ttPolicy === undefined) {
@@ -206,103 +444,47 @@
     node.innerHTML = ttPolicy ? ttPolicy.createHTML(html) : html;
   }
 
-  function dayStats() {
-    const k = todayKey();
-    if (!stats[k]) stats[k] = { focus: 0, rounds: 0, tasks: Object.create(null) };
-    return stats[k];
+  function make(tag, className, text) {
+    const n = document.createElement(tag);
+    if (className) n.className = className;
+    if (text !== undefined) n.textContent = text;
+    return n;
   }
 
   /* ------------------------------------------------------------------ *
-   * Loading (sanitised)
+   * Focus-time accounting (see the invariant in core.js)
    * ------------------------------------------------------------------ */
-  function loadSettings(raw) {
-    const s = Object.assign({}, DEFAULT_SETTINGS);
-    if (!isObj(raw)) return s;
-    for (const k of Object.keys(DEFAULT_SETTINGS)) {
-      const v = raw[k];
-      if (RANGES[k]) { if (finite(v)) s[k] = clamp(Math.round(v), RANGES[k][0], RANGES[k][1]); }
-      else if (typeof v === 'boolean') s[k] = v;
-    }
-    return s;
-  }
-
-  // Task maps are null-prototype objects, so task names such as "constructor"
-  // or "__proto__" are ordinary keys instead of inherited members.
-  function loadStats(raw) {
-    const out = {};
-    if (!isObj(raw)) return out;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - STATS_KEEP_DAYS);
-    const cKey = dkey(cutoff);
-    for (const k of Object.keys(raw)) {
-      const d = raw[k];
-      if (!/^\d{4}-\d\d-\d\d$/.test(k) || k < cKey || !isObj(d)) continue;
-      const tasks = Object.create(null);
-      if (isObj(d.tasks)) for (const name of Object.keys(d.tasks)) { const sec = count(d.tasks[name]); if (sec) tasks[name] = sec; }
-      out[k] = { focus: count(d.focus), rounds: count(d.rounds), tasks };
-    }
-    return out;
-  }
-
-  function loadUi(raw) {
-    const r = isObj(raw) ? raw : {};
-    const p = r.pos;
-    return {
-      mode: r.mode === 'pill' ? 'pill' : 'card',
-      hidden: r.hidden === true,
-      pos: isObj(p) && finite(p.left) && finite(p.top) ? { left: p.left, top: p.top } : null,
-    };
-  }
-
-  function loadState(raw) {
-    const s = freshState();
-    if (!isObj(raw) || !Object.prototype.hasOwnProperty.call(PHASES, raw.phase)) return s;
+  // Credit the focus time since lastTick, capped at the phase end so a phase
+  // that ran out while the machine slept credits only its own length.
+  // `final` is passed when the phase stops (pause, phase end).
+  function flushFocus(final) {
+    if (!S.running || S.phase !== 'focus') return;
     const now = Date.now();
-    s.phase = raw.phase;
-    s.round = finite(raw.round) ? clamp(Math.round(raw.round), 1, settings.rounds) : 1;
-    s.duration = finite(raw.duration) && raw.duration > 0 ? Math.min(raw.duration, 180 * 60000) : durationFor(s.phase);
-    s.remaining = finite(raw.remaining) ? clamp(raw.remaining, 0, s.duration) : s.duration;
-    s.task = typeof raw.task === 'string' ? raw.task.slice(0, TASK_MAX) : '';
-    if (raw.running === true && finite(raw.endsAt)) {
-      s.running = true;
-      // A clock that was moved backwards must not stretch the phase.
-      s.endsAt = Math.min(raw.endsAt, now + s.duration);
-      s.lastTick = finite(raw.lastTick) ? clamp(raw.lastTick, s.endsAt - s.duration, now) : now;
+    const today = dkey(now);
+    const before = stats[today] ? stats[today].focus : 0;
+    const r = creditFocus(stats, S.task, S.lastTick, Math.min(now, S.endsAt), final);
+    if (r.until === S.lastTick) return;
+    S.lastTick = r.until;
+    if (r.sec > 0) saveStats();
+    saveState(); // keeps the stored (stats, state) pair consistent
+
+    const goal = settings.goalMin * 60;
+    const after = stats[today] ? stats[today].focus : 0;
+    if (goal && before < goal && after >= goal) {
+      showNotice('🎉 Daily goal reached — ' + fmtHuman(goal) + ' focused.');
+      notify('Daily goal reached 🎉', fmtHuman(goal) + ' of focus today.');
     }
-    s.pendingFocusMs = finite(raw.pendingFocusMs) ? clamp(raw.pendingFocusMs, -1000, s.duration) : 0;
-    return s;
-  }
-
-  /* ------------------------------------------------------------------ *
-   * Focus-time accounting
-   * ------------------------------------------------------------------ */
-  // Bank the time since lastTick. Capped at endsAt, so a phase that ran out
-  // while the machine slept (or no tab was leading) credits only its own
-  // length, and floored at 0, so a clock moved backwards credits nothing.
-  function accrue(now) {
-    if (S.running && S.phase === 'focus') S.pendingFocusMs += Math.max(0, Math.min(now, S.endsAt) - S.lastTick);
-    S.lastTick = now;
-  }
-
-  // Move banked time into today's stats. Whole seconds only; the sub-second
-  // remainder stays pending so nothing is rounded away over many flushes.
-  // S is saved alongside stats so the stored pair stays consistent.
-  function flushFocus() {
-    accrue(Date.now());
-    const sec = Math.round(S.pendingFocusMs / 1000);
-    if (sec <= 0) return;
-    const d = dayStats();
-    const name = S.task.trim() || 'Untracked';
-    d.focus += sec;
-    d.tasks[name] = (d.tasks[name] || 0) + sec;
-    S.pendingFocusMs -= sec * 1000;
-    saveStats();
-    saveState();
   }
 
   /* ------------------------------------------------------------------ *
    * Sound & notifications
    * ------------------------------------------------------------------ */
+  const CHIMES = {
+    bell: { type: 'sine', gain: 1, notes: [523.25, 659.25, 783.99] },
+    soft: { type: 'triangle', gain: 1, notes: [392.0, 493.88, 587.33] },
+    digital: { type: 'square', gain: 0.3, notes: [880.0, 880.0, 1174.66] },
+  };
+
   let actx = null;
   // Created/resumed from a click inside the widget so autoplay policies let
   // the completion chime play later, even from a background tab.
@@ -320,37 +502,41 @@
     }
   }
 
-  function tone(ctx, freq, at, dur) {
+  function tone(ctx, type, freq, at, dur, peak) {
     const o = ctx.createOscillator();
     const g = ctx.createGain();
-    o.type = 'sine';
+    o.type = type;
     o.frequency.value = freq;
     const t0 = ctx.currentTime + at;
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     o.connect(g).connect(ctx.destination);
     o.start(t0);
     o.stop(t0 + dur + 0.05);
   }
 
+  // Rising notes when focus ends, falling when a break ends.
   function chime(kind) {
-    if (!settings.sound) return;
+    if (!settings.sound || !settings.volume) return;
     const ctx = audio();
     if (!ctx) return;
     try {
-      const notes = kind === 'focusDone' ? [523.25, 659.25, 783.99] : [783.99, 659.25, 523.25];
-      notes.forEach((f, i) => tone(ctx, f, i * 0.18, i === 2 ? 0.35 : 0.18));
+      const c = CHIMES[settings.chime];
+      const notes = kind === 'focusDone' ? c.notes : c.notes.slice().reverse();
+      const peak = Math.max(0.0002, 0.35 * c.gain * settings.volume / 100);
+      notes.forEach((f, i) => tone(ctx, c.type, f, i * 0.18, i === 2 ? 0.35 : 0.18, peak));
     } catch (e) { /* audio blocked */ }
   }
 
   function notify(title, text) {
     if (!settings.notify) return;
+    const focusTab = () => { try { window.focus(); } catch (e) { /* not allowed */ } };
     try {
       if (typeof GM_notification !== 'undefined') {
-        GM_notification({ title, text, timeout: 6000 });
+        GM_notification({ title, text, timeout: 6000, onclick: focusTab });
       } else if ('Notification' in window) {
-        const show = () => new Notification(title, { body: text });
+        const show = () => { new Notification(title, { body: text }).onclick = focusTab; };
         if (Notification.permission === 'granted') show();
         else if (Notification.permission !== 'denied') {
           Promise.resolve(Notification.requestPermission()).then(p => { if (p === 'granted') show(); }, () => {});
@@ -363,10 +549,10 @@
    * Timer engine
    *
    * The script never polls. One self-rescheduling timeout is armed only
-   * while the timer runs, and only as long as it buys something:
-   *   • visible tab → one wake, aligned to each second boundary (display)
-   *   • hidden tab  → a single wake at the exact moment the phase ends
-   *   • paused, or not the leader → no timers at all
+   * while the timer runs, and only as often as it buys something (see
+   * nextWakeDelay in core.js): once a second while visible, once a minute
+   * while hidden with the title countdown on, otherwise only at the phase
+   * end. Paused, or not the leader → no timers at all.
    * Countdown math is pure timestamp arithmetic (endsAt vs Date.now()), so
    * throttled or coalesced wakeups introduce no drift.
    * ------------------------------------------------------------------ */
@@ -377,15 +563,10 @@
   function scheduleTick() {
     stopTicker();
     if (!isLeader || !S.running) return;
-    const now = Date.now();
-    const remaining = S.endsAt - now;
-    // A hidden tab has nothing to repaint, so there is no reason to wake
-    // every second — sleep right through to the moment the phase is due.
-    const delay = remaining <= 0 ? 0
-      : document.hidden ? remaining
-      : Math.min(remaining, 1000 - (now % 1000));
-    wakeTimer = setTimeout(tick, delay);
+    wakeTimer = setTimeout(tick, nextWakeDelay(Date.now(), S.endsAt, document.hidden, settings.titleTimer));
   }
+
+  function syncRemaining() { if (S.running) S.remaining = Math.max(0, S.endsAt - Date.now()); }
 
   function start() {
     if (!isLeader || S.running) return;
@@ -400,8 +581,8 @@
 
   function pause() {
     if (!S.running) return;
-    flushFocus(); // while still running, so the time since the last wake counts
-    S.remaining = Math.max(0, S.endsAt - Date.now());
+    flushFocus(true); // while still running, so the time since the last wake counts
+    syncRemaining();
     S.running = false;
     S.endsAt = 0;
     stopTicker();
@@ -416,24 +597,36 @@
     pause();
     S.phase = 'focus';
     S.round = 1;
-    S.duration = S.remaining = durationFor('focus');
+    S.duration = S.remaining = durationFor(settings, 'focus');
     saveState();
+    render();
+  }
+
+  // "+5 min" on the current phase, running or not.
+  function extend() {
+    ensureLeader();
+    const add = Math.min(EXTEND_MS, MAX_PHASE_MS - S.duration);
+    if (add <= 0) return;
+    S.duration += add;
+    S.remaining += add;
+    if (S.running) S.endsAt += add;
+    saveState();
+    scheduleTick();
     render();
   }
 
   // Move to the next phase. `completed` is false for a manual skip (no round
   // is credited); `announce` controls the chime and notification.
   function advancePhase(completed, announce) {
-    flushFocus();
+    flushFocus(true);
     const finished = S.phase;
-    if (finished === 'focus') {
-      if (completed) { dayStats().rounds += 1; saveStats(); }
-      S.phase = S.round >= settings.rounds ? 'long' : 'short';
-    } else {
-      S.round = finished === 'long' ? 1 : Math.min(S.round + 1, settings.rounds);
-      S.phase = 'focus';
+    if (finished === 'focus' && completed) {
+      // Credited to the day the round ended on.
+      dayEntry(stats, dkey(S.running ? Math.min(Date.now(), S.endsAt) : Date.now())).rounds += 1;
+      saveStats();
     }
-    S.duration = S.remaining = durationFor(S.phase);
+    Object.assign(S, nextPhase(S, settings));
+    S.duration = S.remaining = durationFor(settings, S.phase);
     S.running = false;
     S.endsAt = 0;
 
@@ -458,73 +651,79 @@
   function tick() {
     wakeTimer = null;
     if (!isLeader || !S.running) return;
-    const now = Date.now();
-    S.remaining = Math.max(0, S.endsAt - now);
+    syncRemaining();
     if (S.remaining === 0) { advancePhase(true, true); return; }
-    accrue(now);
-    if (S.pendingFocusMs >= FLUSH_MS) flushFocus();
-    // No repaint while backgrounded — the schedule already sleeps to the
-    // phase boundary in that case, so this only runs when someone can see it.
-    if (!document.hidden) render();
+    if (S.phase === 'focus' && Date.now() - S.lastTick >= FLUSH_MS) flushFocus();
+    render(); // change-cached: a hidden tab only ends up touching its title
     scheduleTick();
   }
 
   /* ------------------------------------------------------------------ *
-   * UI — markup
+   * UI — markup (static strings only; user data is never interpolated)
    * ------------------------------------------------------------------ */
   const ICONS = {
-    play: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-7 w-7"><path d="M8 5v14l11-7z"/></svg>',
-    pause: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-7 w-7"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>',
-    skip: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5"><path d="M6 18l8.5-6L6 6v12zM16 6h2v12h-2z"/></svg>',
-    reset: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5"><path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08a6 6 0 1 1-1.41-6.24L13 11h7V4z"/></svg>',
-    gear: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-[18px] w-[18px]"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>',
-    chart: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-[18px] w-[18px]"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zM16.2 13h2.8v6h-2.8z"/></svg>',
-    minus: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-[18px] w-[18px]"><path d="M5 11h14v2H5z"/></svg>',
-    back: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-[18px] w-[18px]"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>',
-    plus: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>',
-    sub: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4"><path d="M19 13H5v-2h14z"/></svg>',
-    trash: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
-    chevUp: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4"><path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>',
-    chevDown: '<svg viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>',
+    play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>',
+    skip: '<svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6h2v12h-2z"/></svg>',
+    reset: '<svg viewBox="0 0 24 24"><path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08a6 6 0 1 1-1.41-6.24L13 11h7V4z"/></svg>',
+    gear: '<svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>',
+    chart: '<svg viewBox="0 0 24 24"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zM16.2 13h2.8v6h-2.8z"/></svg>',
+    minus: '<svg viewBox="0 0 24 24"><path d="M5 11h14v2H5z"/></svg>',
+    back: '<svg viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>',
+    plus: '<svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>',
+    sub: '<svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14z"/></svg>',
+    trash: '<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
+    chevUp: '<svg viewBox="0 0 24 24"><path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>',
+    chevDown: '<svg viewBox="0 0 24 24"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>',
   };
 
   // A typable number field flanked by +/- steppers. The field is the single
   // source of truth so clicking and typing can't drift apart.
-  function stepperRow(key, label) {
-    const name = label.replace(' (min)', '').toLowerCase();
+  function stepperRow([key, label, step]) {
+    const name = label.replace(/ \(.*\)/, '').toLowerCase();
     return (
-        '<div class="flex items-center justify-between gap-2">' +
-          '<span class="text-[13px] text-slate-300">' + label + '</span>' +
-          '<div class="flex items-center gap-1.5">' +
-            '<button class="pw-stepbtn" data-step="' + key + ':-1" title="Decrease" aria-label="Decrease ' + name + '">' + ICONS.sub + '</button>' +
-            '<input id="pw-set-' + key + '" type="number" inputmode="numeric" min="' + RANGES[key][0] + '" max="' + RANGES[key][1] + '" aria-label="' + name + '" ' +
-              'class="pw-num w-11 select-text rounded-md border border-slate-700/70 bg-slate-800/70 py-0.5 text-center text-[13px] font-semibold tabular-nums text-slate-100 outline-none focus:border-rose-500/60"/>' +
-            '<button class="pw-stepbtn" data-step="' + key + ':1" title="Increase" aria-label="Increase ' + name + '">' + ICONS.plus + '</button>' +
-          '</div>' +
-        '</div>'
-      );
-    }
+      '<div class="pw-row">' +
+        '<span class="pw-setlabel"' + (key === 'goalMin' ? ' title="0 turns the goal off"' : '') + '>' + label + '</span>' +
+        '<div class="pw-stepper">' +
+          '<button class="pw-stepbtn" data-step="' + key + ':-' + step + '" title="Decrease" aria-label="Decrease ' + name + '">' + ICONS.sub + '</button>' +
+          '<input id="pw-set-' + key + '" class="pw-num" type="number" inputmode="numeric" min="' + RANGES[key][0] + '" max="' + RANGES[key][1] + '" aria-label="' + name + '"/>' +
+          '<button class="pw-stepbtn" data-step="' + key + ':' + step + '" title="Increase" aria-label="Increase ' + name + '">' + ICONS.plus + '</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }
 
-    function toggleRow(key, label) {
-      return (
-        '<label class="flex cursor-pointer items-center justify-between select-none">' +
-          '<span class="text-[13px] text-slate-300">' + label + '</span>' +
-          '<input type="checkbox" id="pw-tgl-' + key + '" class="peer sr-only">' +
-          '<span class="relative h-5 w-9 rounded-full bg-slate-700 transition-colors peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-slate-400 after:transition-all peer-checked:after:translate-x-4 peer-checked:after:bg-white"></span>' +
-        '</label>'
-      );
-    }
+  function toggleRow([key, label]) {
+    return (
+      '<label class="pw-row pw-toggle">' +
+        '<span class="pw-setlabel">' + label + '</span>' +
+        '<input type="checkbox" id="pw-tgl-' + key + '">' +
+        '<span class="pw-switch"></span>' +
+      '</label>'
+    );
+  }
 
-    // Built on demand (leader only) rather than at load time on every page.
-    function markup() {
-      return (
-      '<div id="pw-wrap" class="select-none font-sans text-sm leading-normal tracking-normal text-slate-100 antialiased">' +
-        '<div id="pw-card" class="w-[290px] overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl shadow-black/50">' +
+  function selectRow([key, label, options]) {
+    return (
+      '<label class="pw-row">' +
+        '<span class="pw-setlabel">' + label + '</span>' +
+        '<select id="pw-sel-' + key + '" class="pw-select">' +
+          options.map(o => '<option value="' + o[0] + '">' + o[1] + '</option>').join('') +
+        '</select>' +
+      '</label>'
+    );
+  }
+
+  // Built on demand (leader only) rather than at load time on every page.
+  function markup() {
+    return (
+      '<div id="pw-wrap" data-phase="focus" data-theme="auto">' +
+        '<div id="pw-card">' +
 
           // Header (drag handle)
-          '<div id="pw-header" class="flex cursor-move items-center gap-1 border-b border-slate-800 px-3 py-2">' +
-            '<span class="text-base leading-none">🍅</span>' +
-            '<span class="flex-1 text-[13px] font-semibold tracking-wide text-slate-300">Pomodoro</span>' +
+          '<div id="pw-header">' +
+            '<span class="pw-logo">🍅</span>' +
+            '<span class="pw-title">Pomodoro</span>' +
             '<button data-act="stats" title="Stats" aria-label="Stats" class="pw-iconbtn">' + ICONS.chart + '</button>' +
             '<button data-act="settings" title="Settings" aria-label="Settings" class="pw-iconbtn">' + ICONS.gear + '</button>' +
             '<button data-act="min" title="Minimize to pill" aria-label="Minimize to pill" class="pw-iconbtn">' + ICONS.minus + '</button>' +
@@ -532,83 +731,95 @@
           '</div>' +
 
           // Timer view
-          '<div id="pw-view-timer" class="px-4 pb-4 pt-3">' +
-            '<div class="flex items-center justify-between">' +
-              '<span id="pw-phase" class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-rose-500/15 text-rose-400">Focus</span>' +
-              '<span id="pw-rounds" class="text-[11px] font-medium text-slate-400">Round 1/4</span>' +
+          '<div id="pw-view-timer" class="pw-view">' +
+            '<div class="pw-row">' +
+              '<span id="pw-phase">Focus</span>' +
+              '<span class="pw-rounds"><span id="pw-dots" aria-hidden="true"></span><span id="pw-rounds">Round 1/4</span></span>' +
             '</div>' +
-            '<div class="relative mx-auto my-3 h-44 w-44">' +
-              '<svg viewBox="0 0 120 120" class="h-44 w-44 -rotate-90" aria-hidden="true">' +
-                '<circle cx="60" cy="60" r="54" fill="none" stroke-width="8" class="stroke-slate-700/50"/>' +
-                '<circle id="pw-ring" cx="60" cy="60" r="54" fill="none" stroke-width="8" stroke-linecap="round" class="stroke-rose-500" stroke-dasharray="' + RING_LEN.toFixed(3) + '" stroke-dashoffset="0"/>' +
+            '<div class="pw-dial">' +
+              '<svg viewBox="0 0 120 120" aria-hidden="true">' +
+                '<circle cx="60" cy="60" r="54"/>' +
+                '<circle id="pw-ring" cx="60" cy="60" r="54" stroke-dasharray="' + RING_LEN.toFixed(3) + '" stroke-dashoffset="0"/>' +
               '</svg>' +
-              '<div class="absolute inset-0 flex flex-col items-center justify-center">' +
-                '<div id="pw-time" role="timer" class="text-3xl font-bold tabular-nums tracking-tight text-slate-50">25:00</div>' +
-                '<div id="pw-state" role="status" aria-live="polite" class="mt-0.5 text-[11px] font-medium text-slate-400">Ready</div>' +
+              '<div class="pw-dial-text">' +
+                '<div id="pw-time" role="timer">25:00</div>' +
+                '<div id="pw-state" role="status" aria-live="polite">Ready</div>' +
               '</div>' +
             '</div>' +
-            '<input id="pw-task" type="text" placeholder="What are you working on?" maxlength="80" aria-label="Current task" ' +
-              'class="mb-3 w-full select-text rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-1.5 text-[13px] text-slate-100 placeholder-slate-500 outline-none focus:border-rose-500/60"/>' +
-            '<div class="flex items-center justify-center gap-3">' +
+            '<input id="pw-task" class="pw-field" type="text" list="pw-tasklist" autocomplete="off" placeholder="What are you working on?" maxlength="' + TASK_MAX + '" aria-label="Current task"/>' +
+            '<datalist id="pw-tasklist"></datalist>' +
+            '<div class="pw-controls">' +
               '<button data-act="reset" title="Reset to round 1" aria-label="Reset to round 1" class="pw-ctl">' + ICONS.reset + '</button>' +
-              '<button data-act="toggle" id="pw-play" title="Start / Pause" aria-label="Start or pause" class="flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-105 bg-rose-500 hover:bg-rose-400 shadow-rose-500/30">' + ICONS.play + '</button>' +
+              '<button data-act="toggle" id="pw-play" title="Start / Pause" aria-label="Start or pause">' + ICONS.play + '</button>' +
               '<button data-act="skip" title="Skip to next phase" aria-label="Skip to next phase" class="pw-ctl">' + ICONS.skip + '</button>' +
             '</div>' +
-            '<div id="pw-today" class="mt-3 border-t border-slate-800 pt-2 text-center text-[11px] text-slate-400">Today: 0m focused · 0 rounds</div>' +
+            '<button data-act="extend" id="pw-extend" class="pw-link" title="Add 5 minutes to this phase">+5 min</button>' +
+            '<div id="pw-notice" class="pw-notice hidden" role="status"></div>' +
+            '<div id="pw-today">Today: 0s focused · 0 rounds</div>' +
           '</div>' +
 
           // Settings view
-          '<div id="pw-view-settings" class="hidden px-4 pb-4 pt-3">' +
-            '<div class="mb-3 flex items-center gap-2">' +
-              '<button data-act="back" title="Back" class="pw-iconbtn">' + ICONS.back + '</button>' +
-              '<span class="text-[13px] font-semibold text-slate-200">Settings</span>' +
+          '<div id="pw-view-settings" class="pw-view hidden">' +
+            '<div class="pw-viewhead">' +
+              '<button data-act="back" title="Back" aria-label="Back" class="pw-iconbtn">' + ICONS.back + '</button>' +
+              '<span>Settings</span>' +
             '</div>' +
-            '<div class="space-y-2.5">' +
-              SETTING_ROWS.map(r => stepperRow(r[0], r[1])).join('') +
+            '<div class="pw-scroll">' +
+              '<div class="pw-stack">' + SETTING_ROWS.map(stepperRow).join('') + '</div>' +
+              '<div class="pw-section pw-stack">' +
+                TOGGLES.map(toggleRow).join('') +
+                '<label class="pw-row"><span class="pw-setlabel">Volume</span><input id="pw-volume" class="pw-range" type="range" min="0" max="100" step="5" aria-label="Chime volume"/></label>' +
+                SELECTS.map(selectRow).join('') +
+                '<div class="pw-row"><span class="pw-setlabel">Show / hide hotkey</span><button id="pw-hotkey" data-act="hotkey" class="pw-btn pw-kbd" title="Click, then press the new key combination"></button></div>' +
+              '</div>' +
+              '<div class="pw-section pw-stack">' +
+                '<button id="pw-exclude" data-act="exclude" class="pw-btn" title="Re-enable from the Tampermonkey menu, or from this list on another site"></button>' +
+                '<div id="pw-excluded" class="pw-chips"></div>' +
+                '<button id="pw-reset-settings" data-act="defaults" class="pw-btn" title="Restore the default 25/5/15 x 4 configuration">Reset settings to defaults</button>' +
+              '</div>' +
+              '<p class="pw-help">Changes apply immediately. A running phase keeps its current duration; new durations apply to the next phase.</p>' +
             '</div>' +
-            '<div class="mt-3 space-y-2 border-t border-slate-800 pt-3">' +
-              TOGGLES.map(t => toggleRow(t[0], t[1])).join('') +
-            '</div>' +
-            '<button id="pw-reset-settings" data-act="defaults" title="Restore the default 25/5/15 x 4 configuration" ' +
-              'class="mt-3 w-full rounded-lg border border-slate-700/70 py-1.5 text-[12px] font-medium text-slate-400 transition-colors hover:bg-slate-800/70 hover:text-slate-100">Reset settings to defaults</button>' +
-            '<p class="mt-2 text-[11px] leading-relaxed text-slate-500">Changes apply immediately. A running phase keeps its current duration; new durations apply to the next phase.</p>' +
           '</div>' +
 
           // Stats view
-          '<div id="pw-view-stats" class="hidden px-4 pb-4 pt-3">' +
-            '<div class="mb-3 flex items-center gap-2">' +
-              '<button data-act="back" title="Back" class="pw-iconbtn">' + ICONS.back + '</button>' +
-              '<span class="flex-1 text-[13px] font-semibold text-slate-200">Stats</span>' +
-              '<button data-act="clearstats" title="Clear today\'s stats" class="pw-iconbtn">' + ICONS.trash + '</button>' +
+          '<div id="pw-view-stats" class="pw-view hidden">' +
+            '<div class="pw-viewhead">' +
+              '<button data-act="back" title="Back" aria-label="Back" class="pw-iconbtn">' + ICONS.back + '</button>' +
+              '<span>Stats</span>' +
+              '<button data-act="clearstats" id="pw-clear" title="Clear today\'s stats" aria-label="Clear today\'s stats" class="pw-iconbtn">' + ICONS.trash + '</button>' +
             '</div>' +
-            '<div class="grid grid-cols-2 gap-2">' +
-              '<div class="rounded-xl bg-slate-800/70 p-2.5 text-center">' +
-                '<div id="pw-stat-focus" class="text-lg font-bold text-slate-50">0m</div>' +
-                '<div class="pw-label">Focused today</div>' +
-              '</div>' +
-              '<div class="rounded-xl bg-slate-800/70 p-2.5 text-center">' +
-                '<div id="pw-stat-rounds" class="text-lg font-bold text-slate-50">0</div>' +
-                '<div class="pw-label">Rounds today</div>' +
-              '</div>' +
+            '<div class="pw-scroll">' +
+            '<div class="pw-tiles">' +
+              '<div class="pw-tile"><b id="pw-stat-focus">0s</b><span class="pw-label">Focused today</span></div>' +
+              '<div class="pw-tile"><b id="pw-stat-rounds">0</b><span class="pw-label">Rounds today</span></div>' +
             '</div>' +
-            '<div class="pw-label mt-3">Last 7 days</div>' +
-            '<div id="pw-chart" class="mt-1 flex h-24 items-end gap-1.5 rounded-xl bg-slate-800/70 p-2"></div>' +
-            '<div id="pw-week-total" class="mt-1.5 text-center text-[11px] text-slate-400">This week: 0m</div>' +
-            '<div class="pw-label mt-3">Tasks today</div>' +
-            '<div id="pw-tasks" class="mt-1 max-h-32 space-y-1 overflow-y-auto pr-0.5"></div>' +
+            '<div id="pw-goal" class="hidden"><div class="pw-goalbar"><i id="pw-goal-bar"></i></div><div id="pw-goal-text"></div></div>' +
+            '<div class="pw-label pw-section">Last 7 days</div>' +
+            '<div id="pw-chart"></div>' +
+            '<div id="pw-week-total">This week: 0s</div>' +
+            '<div class="pw-label pw-section">Tasks today</div>' +
+            '<div id="pw-tasks"></div>' +
+            '<div class="pw-section pw-btnrow">' +
+              '<button data-act="exportcsv" class="pw-btn" title="Download all stats as a spreadsheet">CSV</button>' +
+              '<button data-act="exportjson" class="pw-btn" title="Download all stats as a backup file">Backup</button>' +
+              '<button data-act="import" class="pw-btn" title="Restore stats from a backup file">Import</button>' +
+            '</div>' +
+            '<input id="pw-import-file" type="file" accept=".json,application/json" class="hidden" aria-hidden="true" tabindex="-1"/>' +
+            '<div id="pw-stats-msg" class="pw-notice hidden" role="status"></div>' +
+            '</div>' +
           '</div>' +
         '</div>' +
 
         // Minimized pill
-        '<button id="pw-pill" class="hidden cursor-pointer items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900 px-3.5 py-1.5 text-slate-100 shadow-xl shadow-black/40">' +
-          '<span id="pw-pill-dot" class="h-2 w-2 rounded-full bg-rose-500"></span>' +
-          '<span id="pw-pill-time" class="text-[13px] font-semibold tabular-nums">25:00</span>' +
+        '<button id="pw-pill" class="hidden" title="Expand">' +
+          '<span id="pw-pill-dot"></span>' +
+          '<span id="pw-pill-time">25:00</span>' +
         '</button>' +
 
         // Drawer tab — fixed at the bottom-left of the viewport; toggles the widget.
-        '<button id="pw-tab" title="Show Pomodoro" class="hidden fixed bottom-0 left-4 flex items-center gap-1.5 rounded-t-lg border border-b-0 border-slate-700/60 bg-slate-900 px-3 py-1.5 text-slate-400 shadow-lg shadow-black/40 transition-colors hover:bg-slate-800 hover:text-slate-100">' +
-          '<span id="pw-tab-icon" class="flex items-center">' + ICONS.chevUp + '</span>' +
-          '<span class="text-[11px] font-semibold tracking-wide">Pomodoro</span>' +
+        '<button id="pw-tab" class="hidden" title="Show Pomodoro">' +
+          '<span id="pw-tab-icon">' + ICONS.chevUp + '</span>' +
+          '<span>Pomodoro</span>' +
         '</button>' +
       '</div>'
     );
@@ -619,9 +830,7 @@
    *
    * Nothing is created until this tab actually becomes the leader, so a tab
    * showing a page the user never looks at pays nothing: no shadow root, no
-   * 17 KB stylesheet parse, no markup parse, no element listeners. The one
-   * dominant per-page cost of this script is therefore paid at most once per
-   * browsing session, in the single tab that leads.
+   * stylesheet parse, no markup parse, no element listeners.
    * ------------------------------------------------------------------ */
   let host = null, shadow = null, el = null, $ = null;
   let built = false, buildTried = false;
@@ -638,30 +847,30 @@
       host.style.setProperty('all', 'initial', 'important');
       host.style.setProperty('position', 'fixed', 'important');
       host.style.setProperty('z-index', '2147483647', 'important');
-      // The host is never display:none'd — the drawer tab must stay visible.
-      // Widget visibility is toggled inside the shadow root instead.
       shadow = host.attachShadow({ mode: 'open' });
 
-      const styleEl = document.createElement('style');
-      styleEl.textContent = TAILWIND_CSS;
-      shadow.appendChild(styleEl);
+      // A constructed stylesheet is not subject to the page's style-src CSP,
+      // so the widget is styled even on sites that forbid inline <style>.
+      try {
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync(STYLES);
+        shadow.adoptedStyleSheets = [sheet];
+      } catch (e) {
+        shadow.appendChild(make('style', '', STYLES));
+      }
 
       const container = document.createElement('div');
       setHTML(container, markup());
       shadow.appendChild(container);
 
       $ = sel => shadow.querySelector(sel);
-      el = {
-        card: $('#pw-card'), pill: $('#pw-pill'),
-        phase: $('#pw-phase'), rounds: $('#pw-rounds'),
-        ring: $('#pw-ring'), time: $('#pw-time'), state: $('#pw-state'),
-        task: $('#pw-task'), play: $('#pw-play'), today: $('#pw-today'),
-        pillDot: $('#pw-pill-dot'), pillTime: $('#pw-pill-time'),
-        viewTimer: $('#pw-view-timer'), viewSettings: $('#pw-view-settings'), viewStats: $('#pw-view-stats'),
-        statFocus: $('#pw-stat-focus'), statRounds: $('#pw-stat-rounds'),
-        chart: $('#pw-chart'), tasks: $('#pw-tasks'), weekTotal: $('#pw-week-total'),
-        tab: $('#pw-tab'), tabIcon: $('#pw-tab-icon'),
-      };
+      el = {};
+      for (const id of ['wrap', 'card', 'pill', 'phase', 'rounds', 'dots', 'ring', 'time', 'state', 'task', 'tasklist',
+        'play', 'today', 'notice', 'pill-time', 'view-timer', 'view-settings', 'view-stats', 'volume', 'hotkey',
+        'exclude', 'excluded', 'clear', 'stat-focus', 'stat-rounds', 'goal', 'goal-bar', 'goal-text', 'chart',
+        'week-total', 'tasks', 'import-file', 'stats-msg', 'tab', 'tab-icon']) {
+        el[id.replace(/-(.)/g, (m, c) => c.toUpperCase())] = $('#pw-' + id);
+      }
       bindEvents();
       watchSiteTitle();
       (document.body || document.documentElement).appendChild(host);
@@ -692,6 +901,11 @@
     set('bottom', 'auto');
   }
 
+  // Stay out of the way of fullscreen video and presentations.
+  function syncFullscreen() {
+    host.style.setProperty('display', document.fullscreenElement ? 'none' : 'block', 'important');
+  }
+
   /* ------------------------------------------------------------------ *
    * UI — rendering
    * ------------------------------------------------------------------ */
@@ -704,27 +918,29 @@
     return true;
   }
 
+  // A backgrounded tab's title is only refreshed once a minute, so it shows
+  // whole minutes instead of a seconds display that would sit there frozen.
+  function titleTime() { return S.running && document.hidden ? fmtMinutes(S.remaining) : fmtClock(S.remaining); }
+
   function render() {
     if (!isLeader || !built) return;
     ensureMounted();
-    const timeStr = fmtClock(S.remaining);
-    const p = PHASES[S.phase];
 
     // The tab-title countdown is independent of widget visibility, so it is
     // refreshed before any early return for a hidden widget.
-    if (changed('title', timeStr + '|' + S.phase + '|' + S.task + '|' + settings.titleTimer)) renderTitle(timeStr);
+    if (changed('title', titleTime() + '|' + S.phase + '|' + S.task + '|' + settings.titleTimer)) renderTitle();
 
     const surface = ui.hidden ? 'none' : ui.mode; // 'card' | 'pill' | 'none'
     if (surface === 'none') return;
 
+    if (changed('theme', settings.theme)) el.wrap.setAttribute('data-theme', settings.theme);
     if (changed('phase', S.phase)) {
-      el.ring.setAttribute('class', p.ring);
-      el.phase.setAttribute('class', 'rounded-full px-2.5 py-0.5 text-[11px] font-semibold ' + p.badge);
-      el.phase.textContent = p.label;
-      el.pillDot.setAttribute('class', 'h-2 w-2 rounded-full ' + p.dot);
+      el.wrap.setAttribute('data-phase', S.phase); // drives every accent colour
+      el.phase.textContent = PHASES[S.phase].label;
     }
 
     // A minimized pill only shows the time.
+    const timeStr = fmtClock(S.remaining);
     if (surface === 'pill') {
       if (changed('time', timeStr)) el.pillTime.textContent = timeStr;
       return;
@@ -732,7 +948,15 @@
     if (changed('time', timeStr)) el.time.textContent = timeStr;
 
     const roundsText = 'Round ' + S.round + '/' + settings.rounds;
-    if (changed('rounds', roundsText)) el.rounds.textContent = roundsText;
+    if (changed('rounds', roundsText + S.phase)) {
+      el.rounds.textContent = roundsText;
+      // One dot per round until the long break.
+      el.dots.textContent = '';
+      for (let i = 1; i <= settings.rounds; i++) {
+        const done = i < S.round || (i === S.round && S.phase !== 'focus');
+        el.dots.appendChild(make('i', done ? 'done' : i === S.round ? 'now' : ''));
+      }
+    }
 
     const off = Math.round(RING_LEN * (1 - (S.duration ? S.remaining / S.duration : 0)) * 2) / 2;
     if (changed('ring', off)) el.ring.setAttribute('stroke-dashoffset', off.toFixed(1));
@@ -740,14 +964,28 @@
     const stateText = S.running ? (S.phase === 'focus' ? 'Focusing…' : 'Resting…') : (S.remaining === S.duration ? 'Ready' : 'Paused');
     if (changed('state', stateText)) el.state.textContent = stateText;
 
-    if (changed('play', S.phase + '|' + S.running)) {
-      setHTML(el.play, S.running ? ICONS.pause : ICONS.play);
-      el.play.setAttribute('class', 'flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-105 ' + p.play);
-    }
+    if (changed('play', S.running)) setHTML(el.play, S.running ? ICONS.pause : ICONS.play);
 
-    const d = stats[todayKey()];
-    const focus = d ? d.focus : 0, rounds = d ? d.rounds : 0;
-    if (changed('today', focus + '|' + rounds)) el.today.textContent = 'Today: ' + fmtHuman(focus) + ' focused · ' + rounds + ' rounds';
+    const d = stats[dkey(Date.now())];
+    const focus = d ? d.focus : 0, rounds = d ? d.rounds : 0, goal = settings.goalMin * 60;
+    if (changed('today', focus + '|' + rounds + '|' + goal)) {
+      el.today.textContent = 'Today: ' + fmtHuman(focus) + (goal ? ' / ' + fmtHuman(goal) : ' focused') + ' · ' + rounds + ' rounds';
+    }
+  }
+
+  // A one-line message under the controls (goal reached, "finished while you
+  // were away", …). Cleared by the next button press.
+  let noticeText = '';
+  function showNotice(text) {
+    noticeText = text;
+    if (!built) return;
+    el.notice.textContent = text;
+    el.notice.classList.toggle('hidden', !text);
+  }
+
+  function showStatsMsg(text) {
+    el.statsMsg.textContent = text;
+    el.statsMsg.classList.toggle('hidden', !text);
   }
 
   /* ---- Tab title ----
@@ -760,16 +998,15 @@
    * MutationObserver below would spin and freeze the page). */
   let origTitle = '';
   let writtenTitle = null;
+  let titleYielded = false; // the site keeps overwriting us — it wins on this page
+  let fightCount = 0, fightSince = 0;
 
-  function renderTitle(timeStr) {
+  function renderTitle() {
     if (!isLeader) return; // only the leader owns the tab title
     const live = document.title;
     if (live !== writtenTitle) origTitle = live; // the site set (or changed) its own title
-    if (!settings.titleTimer) { restoreTitle(); return; }
-    const p = PHASES[S.phase];
-    const task = S.task.replace(/\s+/g, ' ').trim();
-    const shown = task.length > 40 ? task.slice(0, 39) + '…' : task; // keep the tab title readable
-    const t = p.icon + ' ' + timeStr + ' ' + p.label + (shown ? ' · ' + shown : '') + (origTitle ? ' — ' + origTitle : '');
+    if (!settings.titleTimer || titleYielded) { restoreTitle(); return; }
+    const t = buildTitle(S.phase, titleTime(), S.task, origTitle);
     if (live !== t) document.title = t;
     writtenTitle = document.title;
   }
@@ -782,15 +1019,24 @@
   // Re-render when the site (or an SPA) changes its title. Our own writes
   // read back equal to writtenTitle, so the observer ignores them — no
   // feedback loop. Watching <head> also survives a replaced <title> element.
+  // A site that rewrites its title every time we touch it would ping-pong
+  // with us forever, so after a handful of rounds in quick succession we
+  // leave the title to the site until this tab next takes over.
   function watchSiteTitle() {
     const target = document.head || document.querySelector('title');
     if (!target) return;
     new MutationObserver(() => {
-      if (isLeader && document.title !== writtenTitle) renderTitle(fmtClock(S.remaining));
+      if (!isLeader || titleYielded || document.title === writtenTitle) return;
+      const now = Date.now();
+      if (now - fightSince > 2000) { fightSince = now; fightCount = 0; }
+      if (++fightCount > 5) { titleYielded = true; writtenTitle = null; return; }
+      renderTitle();
     }).observe(target, { childList: true, characterData: true, subtree: true });
   }
 
   /* ---- Settings view ---- */
+  let capturing = false; // waiting for the user to press a new hotkey
+
   function syncSettingsView() {
     if (!built) return;
     for (const [key] of SETTING_ROWS) {
@@ -799,59 +1045,157 @@
       if (input !== shadow.activeElement) input.value = settings[key];
     }
     for (const [key] of TOGGLES) $('#pw-tgl-' + key).checked = settings[key];
+    for (const [key] of SELECTS) $('#pw-sel-' + key).value = settings[key];
+    el.volume.value = settings.volume;
+    el.hotkey.textContent = capturing ? 'Press keys…' : hotkeyLabel(settings.hotkey);
+
+    el.exclude.classList.toggle('hidden', !HOST);
+    el.exclude.textContent = 'Hide on ' + HOST;
+    el.excluded.textContent = '';
+    for (const h of settings.excluded) {
+      const chip = make('span', 'pw-chip');
+      chip.appendChild(make('span', '', h));
+      const x = make('button', '', '✕');
+      x.setAttribute('data-unexclude', h);
+      x.setAttribute('aria-label', 'Show on ' + h + ' again');
+      x.title = 'Show on this site again';
+      chip.appendChild(x);
+      el.excluded.appendChild(chip);
+    }
   }
 
   // Single funnel for every settings change — typed fields, +/- steppers,
-  // toggle switches and "reset to defaults" all land here.
+  // switches, selects and "reset to defaults" all land here.
   function applySettings(patch) {
-    Object.assign(settings, patch);
+    settings = loadSettings(Object.assign({}, settings, patch));
     // Rounds can shrink below the round already in flight; keep the readout
     // coherent ("Round 1/1", never "Round 5/3").
     S.round = Math.min(S.round, settings.rounds);
     // A phase that hasn't started yet adopts a new duration straight away.
-    if (!S.running && S.remaining === S.duration) S.duration = S.remaining = durationFor(S.phase);
+    if (!S.running && S.remaining === S.duration) S.duration = S.remaining = durationFor(settings, S.phase);
     saveSettings();
     saveState();
     syncSettingsView();
+    scheduleTick(); // the hidden-tab wake cadence depends on titleTimer
     render();
+  }
+
+  /* ---- Site exclusion ---- */
+  // On an excluded site the script stays inert: no widget, no leadership, no
+  // hotkey. The timer itself is shared, so it keeps counting and resumes in
+  // the next tab that takes over.
+  function setSiteExcluded(on) {
+    if (!HOST) return;
+    const cfg = liveSettings();
+    const list = cfg.excluded.filter(h => !hostExcluded(HOST, [h]));
+    if (on) list.push(HOST);
+    if (isLeader) applySettings({ excluded: list });
+    else store.set(KEYS.settings, Object.assign(cfg, { excluded: list }));
+    if (!on) claimLeadership();
+    else if (isLeader) {
+      store.set(KEYS.leader, { id: '', ts: Date.now() }); // nobody leads until another tab is focused
+      yieldLeadership();
+    }
   }
 
   /* ---- Stats view ---- */
   function renderStats() {
-    const today = todayKey();
+    const now = Date.now();
+    const today = dkey(now);
     const d = stats[today] || { focus: 0, rounds: 0, tasks: {} };
     el.statFocus.textContent = fmtHuman(d.focus);
     el.statRounds.textContent = d.rounds;
 
-    // 7-day chart
+    const goal = settings.goalMin * 60;
+    el.goal.classList.toggle('hidden', !goal);
+    if (goal) {
+      el.goalBar.style.width = Math.min(100, Math.round(d.focus / goal * 100)) + '%';
+      el.goalText.textContent = fmtHuman(d.focus) + ' of ' + fmtHuman(goal) + ' goal';
+    }
+
+    // 7-day chart (heights are set through the CSSOM, never a style attribute,
+    // so a strict style-src CSP has nothing to object to)
     const days = [];
     for (let i = 6; i >= 0; i--) {
-      const dt = new Date();
+      const dt = new Date(now);
       dt.setDate(dt.getDate() - i);
-      const k = dkey(dt);
+      const k = dkey(dt.getTime());
       days.push({ today: k === today, label: 'SMTWTFS'[dt.getDay()], val: stats[k] ? stats[k].focus : 0 });
     }
     const max = Math.max(60, ...days.map(x => x.val));
-    setHTML(el.chart, days.map(x => {
-      const h = Math.max(2, Math.round((x.val / max) * 56));
-      return '<div class="flex h-full flex-1 flex-col items-center justify-end gap-1">' +
-        '<div class="w-full rounded-t ' + (x.today ? 'bg-rose-500' : 'bg-slate-600') + '" style="height:' + h + 'px" title="' + fmtHuman(x.val) + '"></div>' +
-        '<div class="text-[9px] ' + (x.today ? 'font-bold text-slate-300' : 'text-slate-500') + '">' + x.label + '</div>' +
-      '</div>';
-    }).join(''));
-
+    el.chart.textContent = '';
+    for (const x of days) {
+      const col = make('div', 'pw-col' + (x.today ? ' today' : ''));
+      const bar = make('div', 'pw-bar');
+      bar.style.height = Math.max(2, Math.round((x.val / max) * 56)) + 'px';
+      bar.title = fmtHuman(x.val);
+      col.appendChild(bar);
+      col.appendChild(make('span', '', x.label));
+      el.chart.appendChild(col);
+    }
     el.weekTotal.textContent = 'This week: ' + fmtHuman(days.reduce((a, x) => a + x.val, 0));
 
     // Tasks today
-    const entries = Object.entries(d.tasks).sort((a, b) => b[1] - a[1]);
-    setHTML(el.tasks, entries.length
-      ? entries.slice(0, 20).map(([name, sec]) =>
-          '<div class="flex items-center justify-between rounded-lg bg-slate-800/70 px-2.5 py-1.5">' +
-            '<span class="truncate text-[12px] text-slate-300">' + esc(name) + '</span>' +
-            '<span class="ml-2 shrink-0 text-[12px] font-semibold tabular-nums text-slate-100">' + fmtHuman(sec) + '</span>' +
-          '</div>'
-        ).join('')
-      : '<div class="rounded-lg bg-slate-800/40 px-2.5 py-2 text-center text-[12px] text-slate-500">No focus time logged yet today.</div>');
+    const entries = Object.entries(d.tasks).sort((a, b) => b[1] - a[1]).slice(0, 20);
+    el.tasks.textContent = '';
+    for (const [name, sec] of entries) {
+      const row = make('div', 'pw-task');
+      row.appendChild(make('span', '', name));
+      row.appendChild(make('b', '', fmtHuman(sec)));
+      el.tasks.appendChild(row);
+    }
+    if (!entries.length) el.tasks.appendChild(make('div', 'pw-empty', 'No focus time logged yet today.'));
+  }
+
+  // Autocomplete for the task field, from recently tracked task names.
+  function refreshTaskList() {
+    el.tasklist.textContent = '';
+    for (const name of recentTasks(stats, 15)) el.tasklist.appendChild(make('option')).value = name;
+  }
+
+  // Hand a generated file to the browser. A blob: URL — nothing leaves the machine.
+  function download(name, mime, text) {
+    const url = URL.createObjectURL(new Blob([text], { type: mime }));
+    const a = make('a');
+    a.href = url;
+    a.download = name;
+    shadow.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  function exportStats(format) {
+    flushFocus();
+    const now = Date.now();
+    const name = 'pomodoro-stats-' + dkey(now) + '.' + format;
+    try {
+      if (format === 'csv') download(name, 'text/csv', statsToCsv(stats));
+      else download(name, 'application/json', statsToJson(stats, now));
+      showStatsMsg('Saved ' + name);
+    } catch (e) {
+      showStatsMsg('This page blocked the download.');
+    }
+  }
+
+  function importStats(file) {
+    if (!file) return;
+    if (file.size > 2e6) { showStatsMsg('That file is too large.'); return; }
+    const reader = new FileReader();
+    reader.onerror = () => showStatsMsg('Could not read that file.');
+    reader.onload = () => {
+      if (!isLeader) return;
+      const imported = parseImport(String(reader.result), Date.now());
+      if (!imported) { showStatsMsg('No usable stats in that file.'); return; }
+      flushFocus();
+      const n = mergeStats(stats, imported);
+      saveStats();
+      renderStats();
+      refreshTaskList();
+      render();
+      showStatsMsg('Imported ' + n + (n === 1 ? ' day.' : ' days.'));
+    };
+    reader.readAsText(file);
   }
 
   /* ---- View switching ---- */
@@ -861,7 +1205,7 @@
     el.viewSettings.classList.toggle('hidden', name !== 'settings');
     el.viewStats.classList.toggle('hidden', name !== 'stats');
     if (name === 'settings') syncSettingsView();
-    if (name === 'stats') renderStats();
+    if (name === 'stats') { showStatsMsg(''); renderStats(); }
   }
 
   // The drawer tab is position:fixed (viewport-relative) inside the shadow root,
@@ -873,9 +1217,7 @@
     const surface = isLeader && !ui.hidden ? ui.mode : 'none';
     el.card.classList.toggle('hidden', surface !== 'card');
     el.pill.classList.toggle('hidden', surface !== 'pill');
-    el.pill.classList.toggle('flex', surface === 'pill');
     el.tab.classList.toggle('hidden', !isLeader);
-    el.tab.classList.toggle('flex', isLeader);
     setHTML(el.tabIcon, ui.hidden ? ICONS.chevUp : ICONS.chevDown);
     el.tab.setAttribute('title', ui.hidden ? 'Show Pomodoro' : 'Hide Pomodoro');
     if (isLeader) place(ui.pos); // the surface (and so its size) may have changed
@@ -903,23 +1245,32 @@
   let isLeader = false;
 
   function reloadSharedState() {
+    const now = Date.now();
     settings = loadSettings(store.get(KEYS.settings));
-    stats = loadStats(store.get(KEYS.stats));
+    stats = loadStats(store.get(KEYS.stats), now);
     ui = loadUi(store.get(KEYS.ui));
-    S = loadState(store.get(KEYS.state));
-    // A phase that ran out while no tab was leading completes silently (it
-    // was not witnessed); the next one starts from now if auto-start is on.
-    if (S.running && S.endsAt <= Date.now()) advancePhase(true, false);
+    S = loadState(store.get(KEYS.state), settings, now);
+    noticeText = '';
+    // A phase that ran out while no tab was leading completes silently (no
+    // chime for something nobody witnessed) but leaves a note in the widget;
+    // the next phase starts from now if auto-start is on.
+    if (S.running && S.endsAt <= now) {
+      noticeText = (S.phase === 'focus' ? 'A focus round' : 'A break') + ' finished while you were away.';
+      advancePhase(true, false);
+    }
   }
 
   function becomeLeader() {
     if (isLeader) return;
     isLeader = true;
+    titleYielded = false;
     reloadSharedState();
     buildUI();
     if (built) {
       el.task.value = S.task;
+      refreshTaskList();
       syncSettingsView();
+      showNotice(noticeText);
       applyVisibility(); // toggles the surfaces, positions, then repaints
     }
     scheduleTick();
@@ -947,6 +1298,9 @@
 
   function ensureLeader() { if (!isLeader) claimLeadership(); }
 
+  // What focus/visibility do: take over, unless this site is excluded.
+  function autoClaim() { if (!excludedHere()) claimLeadership(); }
+
   // Cross-tab handoff — GM listeners, or the localStorage 'storage' event as
   // fallback (fires in every tab except the writer).
   if (typeof GM_addValueChangeListener !== 'undefined') {
@@ -958,19 +1312,40 @@
   }
 
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) claimLeadership();
+    if (!document.hidden) autoClaim();
     // Visible: repaint what was skipped and resume per-second wakes.
-    // Hidden: drop to a single wake at the phase end.
-    if (isLeader) { render(); scheduleTick(); }
+    // Hidden: switch the title to whole minutes and slow the wakes down.
+    if (isLeader) { syncRemaining(); render(); scheduleTick(); }
   });
-  window.addEventListener('focus', claimLeadership);
+  window.addEventListener('focus', autoClaim);
 
   /* ------------------------------------------------------------------ *
    * Events — bound once, when the UI is built (leader only)
    * ------------------------------------------------------------------ */
   let pillDragged = false;
+  let clearArmed = null; // timeout id while the clear-stats button awaits a second click
+
+  function disarmClear() {
+    clearTimeout(clearArmed);
+    clearArmed = null;
+    el.clear.classList.remove('armed');
+    el.clear.title = "Clear today's stats";
+  }
 
   function bindEvents() {
+    // Recording a new hotkey swallows the next key combination entirely.
+    shadow.addEventListener('keydown', e => {
+      if (!capturing) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const hk = e.key === 'Escape' ? null : hotkeyFromEvent(e);
+      if (hk || e.key === 'Escape') {
+        capturing = false;
+        if (hk) applySettings({ hotkey: hk }); else syncSettingsView();
+      }
+    });
+    el.hotkey.addEventListener('blur', () => { if (capturing) { capturing = false; syncSettingsView(); } });
+
     // Keystrokes typed in the widget must not escape to the page.
     //
     // Shadow DOM retargets events to the host element, so a page's guard such
@@ -980,36 +1355,58 @@
     // character — typically one specific letter, e.g. 'k' on Gmail (previous
     // conversation), YouTube (play/pause) or GitHub. Stopping propagation at
     // the shadow root keeps plain typing inside; genuine modifier combos
-    // (copy/paste, undo, our Alt+Shift+T hotkey) are left to propagate.
+    // (copy/paste, undo, our own hotkey) are left to propagate.
     const shieldKeys = e => { if (!e.ctrlKey && !e.metaKey && !e.altKey) e.stopPropagation(); };
     for (const type of ['keydown', 'keypress', 'keyup']) shadow.addEventListener(type, shieldKeys);
 
     shadow.addEventListener('click', e => {
       if (settings.sound) audio(); // unlock audio inside a user gesture (autoplay policies)
 
+      const chip = e.target.closest('[data-unexclude]');
+      if (chip) {
+        applySettings({ excluded: settings.excluded.filter(h => h !== chip.getAttribute('data-unexclude')) });
+        return;
+      }
+
       const stepBtn = e.target.closest('[data-step]');
       if (stepBtn) {
         const [key, delta] = stepBtn.getAttribute('data-step').split(':');
-        const [lo, hi] = RANGES[key];
-        applySettings({ [key]: clamp(settings[key] + Number(delta), lo, hi) });
+        applySettings({ [key]: settings[key] + Number(delta) }); // clamped by loadSettings
         return;
       }
 
       const btn = e.target.closest('[data-act]');
       if (!btn) return;
-      switch (btn.getAttribute('data-act')) {
+      const act = btn.getAttribute('data-act');
+      showNotice('');
+      if (clearArmed && act !== 'clearstats') disarmClear();
+      switch (act) {
         case 'toggle': toggle(); break;
         case 'reset': reset(); break;
         case 'skip': skip(); break;
+        case 'extend': extend(); break;
         case 'min': setUi({ mode: 'pill' }); break;
         case 'hide': setUi({ hidden: true }); break;
         case 'settings': showView('settings'); break;
         case 'stats': showView('stats'); break;
         case 'back': showView('timer'); break;
-        case 'defaults': applySettings(DEFAULT_SETTINGS); break;
+        case 'defaults': applySettings(Object.assign({}, DEFAULT_SETTINGS, { excluded: settings.excluded })); break;
+        case 'hotkey': capturing = !capturing; syncSettingsView(); break;
+        case 'exclude': setSiteExcluded(true); break;
+        case 'exportcsv': exportStats('csv'); break;
+        case 'exportjson': exportStats('json'); break;
+        case 'import': el.importFile.click(); break;
         case 'clearstats':
-          if (confirm("Clear today's stats?")) {
-            delete stats[todayKey()];
+          // Two clicks instead of a native confirm dialog: a page can override or block
+          // those, and they freeze the timer while open.
+          if (!clearArmed) {
+            el.clear.classList.add('armed');
+            el.clear.title = 'Click again to clear today';
+            clearArmed = setTimeout(disarmClear, 4000);
+          } else {
+            disarmClear();
+            flushFocus();
+            delete stats[dkey(Date.now())];
             saveStats();
             renderStats();
             render();
@@ -1023,10 +1420,11 @@
       flushFocus();
       S.task = el.task.value.slice(0, TASK_MAX);
       saveState();
+      refreshTaskList();
       render();
     });
 
-    // Toggle switches
+    // Switches, selects and the volume slider
     for (const [key] of TOGGLES) {
       const t = $('#pw-tgl-' + key);
       t.addEventListener('change', () => {
@@ -1034,23 +1432,39 @@
         if (key === 'sound' && t.checked) chime('focusDone'); // audible preview
       });
     }
+    for (const [key] of SELECTS) {
+      const s = $('#pw-sel-' + key);
+      s.addEventListener('change', () => {
+        applySettings({ [key]: s.value });
+        if (key === 'chime') chime('focusDone');
+      });
+    }
+    el.volume.addEventListener('change', () => {
+      applySettings({ volume: Number(el.volume.value) });
+      chime('focusDone');
+    });
 
-    // Duration fields — typing commits on Enter or blur.
+    // Number fields — typing commits on Enter or blur.
     for (const [key] of SETTING_ROWS) {
       const input = $('#pw-set-' + key);
       input.addEventListener('change', () => {
-        const [lo, hi] = RANGES[key];
         const typed = Math.round(Number(input.value));
-        const v = clamp(finite(typed) && typed > 0 ? typed : settings[key], lo, hi);
+        const v = clamp(input.value !== '' && finite(typed) ? typed : settings[key], RANGES[key][0], RANGES[key][1]);
         input.value = v; // show the clamped value back to the user
         if (v !== settings[key]) applySettings({ [key]: v });
       });
     }
 
-    // Enter commits a field (blur then fires `change`); Escape blurs a
-    // field, or backs out of a panel.
+    el.importFile.addEventListener('change', () => {
+      const file = el.importFile.files && el.importFile.files[0];
+      importStats(file);
+      el.importFile.value = ''; // so picking the same file again fires `change`
+    });
+
+    // Enter commits a text/number field (blur then fires `change`); Escape
+    // leaves a field and backs out of a panel.
     shadow.addEventListener('keydown', e => {
-      const field = e.target.tagName === 'INPUT' && e.target.type !== 'checkbox' ? e.target : null;
+      const field = e.target.tagName === 'INPUT' && /^(text|number)$/.test(e.target.type) ? e.target : null;
       if (e.key === 'Enter' && field) { e.preventDefault(); field.blur(); }
       else if (e.key === 'Escape') {
         if (field) field.blur();
@@ -1066,6 +1480,8 @@
 
     // Drawer tab → show/hide the widget
     el.tab.addEventListener('click', () => setUi({ hidden: !ui.hidden }));
+
+    document.addEventListener('fullscreenchange', syncFullscreen);
 
     makeDraggable($('#pw-header'), false);
     makeDraggable(el.pill, true);
@@ -1116,21 +1532,37 @@
     setUi({ hidden: !ui.hidden });
   }
 
-  // Alt+Shift+T — avoids the browser's private-window shortcut (Ctrl/Alt+Shift+P).
+  function inPageField(e) {
+    const t = e.composedPath ? e.composedPath()[0] : e.target;
+    if (!t || !t.tagName || (shadow && shadow.contains(t))) return false;
+    return t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
+  }
+
+  // Show/hide hotkey (configurable; default Alt+Shift+T, which avoids the
+  // browser's private-window shortcut Ctrl/Alt+Shift+P).
   window.addEventListener('keydown', e => {
-    if (e.altKey && e.shiftKey && e.code === 'KeyT' && !e.repeat) {
-      e.preventDefault();
-      toggleWidget();
-    }
+    if (e.repeat || capturing || !(e.altKey || e.ctrlKey || e.metaKey)) return;
+    const hk = hotkeyFromEvent(e);
+    if (!hk) return;
+    const cfg = liveSettings();
+    if (hk !== cfg.hotkey || hostExcluded(HOST, cfg.excluded)) return;
+    // Alt(+Shift) combos type a character on macOS — don't steal it from a
+    // field on the page the user is typing in.
+    if (!e.ctrlKey && !e.metaKey && inPageField(e)) return;
+    e.preventDefault();
+    toggleWidget();
   });
 
   if (typeof GM_registerMenuCommand !== 'undefined') {
+    // Everything but the per-site switch is inert on an excluded site.
+    const unlessExcluded = fn => () => { if (!excludedHere()) fn(); };
     try {
-      GM_registerMenuCommand('▶ / ⏸  Start / Pause', toggle);
-      GM_registerMenuCommand('👁  Show / Hide widget  (Alt+Shift+T)', toggleWidget);
-      GM_registerMenuCommand('⏭  Skip phase', skip);
-      GM_registerMenuCommand('📊  Open stats', () => showWidget('stats'));
-      GM_registerMenuCommand('⚙  Open settings', () => showWidget('settings'));
+      GM_registerMenuCommand('▶ / ⏸  Start / Pause', unlessExcluded(toggle));
+      GM_registerMenuCommand('👁  Show / Hide widget', unlessExcluded(toggleWidget));
+      GM_registerMenuCommand('⏭  Skip phase', unlessExcluded(skip));
+      GM_registerMenuCommand('📊  Open stats', unlessExcluded(() => showWidget('stats')));
+      GM_registerMenuCommand('⚙  Open settings', unlessExcluded(() => showWidget('settings')));
+      GM_registerMenuCommand('🚫  Hide / show on this site', () => setSiteExcluded(!excludedHere()));
     } catch (e) { /* older managers */ }
   }
 
@@ -1141,15 +1573,15 @@
   /* ------------------------------------------------------------------ *
    * Startup
    * ------------------------------------------------------------------ */
-  // Startup performs no storage reads, builds no DOM and arms no timers. The
-  // widget is created lazily by whichever tab becomes the leader, and even
-  // then only in an idle slot, so it never competes with the page's own load
-  // work. A background-loaded tab stays completely inert until it is focused.
+  // Startup builds no DOM and arms no timers; a background-loaded tab does not
+  // even read storage until it is focused. The widget is created lazily by
+  // whichever tab becomes the leader, and even then only in an idle slot, so
+  // it never competes with the page's own load work.
   // There is deliberately no unload handler: saved state is always
   // self-consistent, and unload listeners would disable the back/forward cache.
   const idle = window.requestIdleCallback
     ? cb => window.requestIdleCallback(cb, { timeout: 300 })
     : cb => setTimeout(cb, 0);
 
-  if (document.visibilityState === 'visible') idle(claimLeadership);
+  if (document.visibilityState === 'visible') idle(autoClaim);
 })();

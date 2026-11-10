@@ -24,7 +24,8 @@ function setValue(fromWindow, key, value) {
   }
 }
 
-let fakeNow = Date.now();
+// Starts at 09:00 local so the suite never straddles midnight by accident.
+let fakeNow = new Date().setHours(9, 0, 0, 0);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const windows = [];
 
@@ -60,10 +61,11 @@ async function boot({ hidden = false, trustedTypes = false } = {}) {
   setVisibilityState(w, hidden ? 'hidden' : 'visible');
 
   const notifications = [];
+  const menu = []; // { label, fn } — Tampermonkey menu commands
   w.GM_getValue = k => store.get(k);
   w.GM_setValue = (k, v) => setValue(w, k, v);
   w.GM_notification = n => notifications.push(n);
-  w.GM_registerMenuCommand = () => {};
+  w.GM_registerMenuCommand = (label, fn) => { menu.push({ label, fn }); };
   w.GM_addValueChangeListener = (key, cb) => { listeners.push({ win: w, key, cb }); return listeners.length; };
 
   if (trustedTypes) {
@@ -90,7 +92,7 @@ async function boot({ hidden = false, trustedTypes = false } = {}) {
   const hostOf = () => w.document.getElementById('pomodoro-focus-timer-host');
   const shadowOf = () => { const h = hostOf(); return h ? h.shadowRoot : null; };
   return {
-    dom, w, notifications,
+    dom, w, notifications, menu,
     get built() { return !!hostOf(); },
     get shadow() { return shadowOf(); },
     $: sel => { const s = shadowOf(); return s ? s.querySelector(sel) : null; },
@@ -116,8 +118,6 @@ const main = async () => {
   check('the leading tab builds the widget', A.built);
   check('card is visible', !A.$('#pw-card').classList.contains('hidden'));
   check('drawer tab is visible (no "hidden")', !tab.classList.contains('hidden'), tab.className);
-  check('drawer tab has "flex"', tab.classList.contains('flex'));
-  check('drawer tab is docked bottom-left', /\bfixed\b/.test(tab.className) && /\bbottom-0\b/.test(tab.className) && /\bleft-4\b/.test(tab.className));
   check('drawer tab shows the down arrow while open', A.$('#pw-tab-icon').innerHTML.includes('M7.41 8.59'));
 
   section('Tabs that never lead stay inert');
@@ -275,10 +275,15 @@ const main = async () => {
   check('the shield does not block our own key handling', !A.$('#pw-view-timer').classList.contains('hidden'));
 
   section('Focus accounting (exact, capped, handoff-safe)');
-  // Day keys come from the real clock (new Date()), so "today" is the newest key.
+  // Summed over every stored day, so the checks hold whatever day a credit lands on.
   const todayStats = () => {
-    const s = JSON.parse(store.get('pomodoro.stats') || '{}');
-    return s[Object.keys(s).sort().pop()] || { focus: 0, rounds: 0, tasks: {} };
+    const t = { focus: 0, rounds: 0, tasks: Object.create(null) };
+    for (const d of Object.values(JSON.parse(store.get('pomodoro.stats') || '{}'))) {
+      t.focus += d.focus;
+      t.rounds += d.rounds;
+      for (const [n, v] of Object.entries(d.tasks)) t.tasks[n] = (t.tasks[n] || 0) + v;
+    }
+    return t;
   };
   const setTask = name => { const t = A.$('#pw-task'); t.value = name; t.dispatchEvent(new A.w.Event('change')); };
 
@@ -346,13 +351,182 @@ const main = async () => {
   const bHost = B.w.document.getElementById('pomodoro-focus-timer-host');
   check('a reclaiming tab moves its widget to the saved position', bHost.style.left === '100px' && bHost.style.top === '120px', bHost.getAttribute('style'));
 
+  section('Round dots, +5 min and the daily goal');
+  A.w.dispatchEvent(new A.w.Event('focus'));
+  await until(() => !A.$('#pw-card').classList.contains('hidden'));
+  A.$('[data-act="reset"]').click();
+  check('one dot per round, the current one marked', A.shadow.querySelectorAll('#pw-dots i').length === 4 && A.shadow.querySelectorAll('#pw-dots i.now').length === 1, A.$('#pw-dots').innerHTML);
+  A.$('#pw-extend').click();
+  check('+5 min extends a phase that has not started', A.$('#pw-time').textContent === '30:00', A.$('#pw-time').textContent);
+  A.$('#pw-play').click();
+  A.$('#pw-extend').click();
+  check('+5 min extends a running phase', A.$('#pw-time').textContent === '35:00' && A.$('#pw-state').textContent === 'Focusing\u2026', A.$('#pw-time').textContent);
+  A.$('[data-act="skip"]').click();
+  check('a finished round fills its dot', A.shadow.querySelectorAll('#pw-dots i.done').length === 1, A.$('#pw-dots').innerHTML);
+  A.$('[data-act="reset"]').click();
+
+  setNum('goalMin', Math.ceil(todayStats().focus / 60) + 1);
+  check('the footer shows progress toward the goal', / \/ /.test(A.$('#pw-today').textContent), A.$('#pw-today').textContent);
+  n0 = A.notifications.length;
+  A.$('#pw-play').click();
+  fakeNow += 120000;
+  A.$('#pw-play').click();
+  check('reaching the goal is announced once', A.notifications.length - n0 === 1 && /goal/i.test(A.notifications[A.notifications.length - 1].title), JSON.stringify(A.notifications.slice(n0)));
+  check('...and noted in the widget', /goal/i.test(A.$('#pw-notice').textContent) && !A.$('#pw-notice').classList.contains('hidden'), A.$('#pw-notice').textContent);
+  check('notifications focus the tab when clicked', typeof A.notifications[A.notifications.length - 1].onclick === 'function');
+  A.$('[data-act="stats"]').click();
+  check('the stats view shows the goal bar', !A.$('#pw-goal').classList.contains('hidden') && A.$('#pw-goal-bar').style.width === '100%', A.$('#pw-goal-bar').style.width);
+  check('pressing a button clears the notice', A.$('#pw-notice').classList.contains('hidden'));
+  A.$('[data-act="back"]').click();
+  setNum('goalMin', 0);
+  A.$('[data-act="reset"]').click();
+
+  section('Task autocomplete');
+  const suggestions = [...A.shadow.querySelectorAll('#pw-tasklist option')].map(o => o.value);
+  check('recent task names are offered', suggestions.includes('constructor') && suggestions.includes('toString'), suggestions.join(','));
+  check('"Untracked" is not offered', !suggestions.includes('Untracked'), suggestions.join(','));
+
+  section('Theme and sound settings');
+  const setSelect = (key, v) => { const el = A.$('#pw-sel-' + key); el.value = v; el.dispatchEvent(new A.w.Event('change')); };
+  setSelect('theme', 'light');
+  check('the theme applies immediately', A.$('#pw-wrap').getAttribute('data-theme') === 'light');
+  setSelect('chime', 'digital');
+  A.$('#pw-volume').value = '35';
+  A.$('#pw-volume').dispatchEvent(new A.w.Event('change'));
+  check('chime and volume are saved', settingsNow().chime === 'digital' && settingsNow().volume === 35, JSON.stringify(settingsNow()));
+  A.$('#pw-reset-settings').click();
+  check('reset-settings restores them', settingsNow().theme === 'auto' && settingsNow().chime === 'bell' && settingsNow().volume === 70, JSON.stringify(settingsNow()));
+
+  section('Stats: two-click clear, export, import');
+  A.$('[data-act="stats"]').click();
+  const focusBefore = todayStats().focus;
+  A.$('#pw-clear').click();
+  check('the first click only arms the clear button', todayStats().focus === focusBefore && A.$('#pw-clear').classList.contains('armed'));
+
+  const blobs = [], downloads = [];
+  A.w.URL.createObjectURL = b => { blobs.push(b); return 'blob:test'; };
+  A.w.URL.revokeObjectURL = () => {};
+  A.w.HTMLAnchorElement.prototype.click = function () { downloads.push(this.download); };
+  const readBlob = b => new Promise(r => { const fr = new A.w.FileReader(); fr.onload = () => r(String(fr.result)); fr.readAsText(b); });
+  A.$('[data-act="exportcsv"]').click();
+  check('another button disarms it', !A.$('#pw-clear').classList.contains('armed') && todayStats().focus === focusBefore);
+  A.$('[data-act="exportjson"]').click();
+  check('exports are offered as dated files', /^pomodoro-stats-\d{4}-\d\d-\d\d\.csv$/.test(downloads[0]) && /\.json$/.test(downloads[1]), downloads.join(' '));
+  const csv = await readBlob(blobs[0]);
+  check('the CSV has a header and task rows', csv.startsWith('date,task,focus_seconds') && csv.includes(',Untracked,'), csv.slice(0, 120));
+  const backup = await readBlob(blobs[1]);
+  check('the backup round-trips the stats', JSON.stringify(JSON.parse(backup).stats) === store.get('pomodoro.stats'));
+
+  A.$('#pw-clear').click();
+  A.$('#pw-clear').click();
+  check('the second click clears today', todayStats().focus === 0 && A.$('#pw-stat-focus').textContent === '0s', JSON.stringify(todayStats()));
+
+  const importFile = text => {
+    const input = A.$('#pw-import-file');
+    Object.defineProperty(input, 'files', { value: [new A.w.File([text], 'backup.json', { type: 'application/json' })], configurable: true });
+    input.dispatchEvent(new A.w.Event('change'));
+  };
+  importFile(backup);
+  await until(() => /Imported/.test(A.$('#pw-stats-msg').textContent));
+  check('importing the backup restores the stats', todayStats().focus === focusBefore && A.$('#pw-stat-focus').textContent !== '0s', A.$('#pw-stats-msg').textContent);
+  importFile('<script>alert(1)</script>');
+  await until(() => /No usable/.test(A.$('#pw-stats-msg').textContent));
+  check('a junk file is rejected without touching the stats', /No usable/.test(A.$('#pw-stats-msg').textContent) && todayStats().focus === focusBefore, A.$('#pw-stats-msg').textContent);
+  A.$('[data-act="back"]').click();
+
+  section('Backgrounded tab: coarse title');
+  A.$('#pw-play').click();
+  setVisibility(A.w, 'hidden');
+  check('a hidden running tab shows whole minutes', /\b25m\b/.test(A.w.document.title) && !/\d\d:\d\d/.test(A.w.document.title), A.w.document.title);
+  setVisibility(A.w, 'visible');
+  check('it switches back to the clock when visible', /25:00/.test(A.w.document.title), A.w.document.title);
+  A.$('[data-act="reset"]').click();
+
+  section('Fullscreen');
+  const aHost = A.w.document.getElementById('pomodoro-focus-timer-host');
+  Object.defineProperty(A.w.document, 'fullscreenElement', { value: A.w.document.body, configurable: true });
+  A.w.document.dispatchEvent(new A.w.Event('fullscreenchange'));
+  check('the widget hides while the page is fullscreen', aHost.style.display === 'none', aHost.getAttribute('style'));
+  Object.defineProperty(A.w.document, 'fullscreenElement', { value: null, configurable: true });
+  A.w.document.dispatchEvent(new A.w.Event('fullscreenchange'));
+  check('...and returns afterwards', aHost.style.display === 'block', aHost.getAttribute('style'));
+
+  section('Configurable hotkey');
+  const press = (target, init) => target.dispatchEvent(new A.w.KeyboardEvent('keydown', Object.assign({ bubbles: true, composed: true, cancelable: true }, init)));
+  const cardHidden = () => A.$('#pw-card').classList.contains('hidden');
+  press(A.w.document.body, { altKey: true, shiftKey: true, code: 'KeyT', key: 'T' });
+  check('Alt+Shift+T hides the widget', cardHidden());
+  press(A.w.document.body, { altKey: true, shiftKey: true, code: 'KeyT', key: 'T' });
+  check('...and shows it again', !cardHidden());
+  const pageInput = A.w.document.createElement('input');
+  A.w.document.body.appendChild(pageInput);
+  const typed = new A.w.KeyboardEvent('keydown', { bubbles: true, composed: true, cancelable: true, altKey: true, shiftKey: true, code: 'KeyT', key: '\u02c7' });
+  pageInput.dispatchEvent(typed);
+  check('an Alt combo typed into a page field is left alone', !cardHidden() && !typed.defaultPrevented);
+
+  A.$('[data-act="settings"]').click();
+  A.$('#pw-hotkey').click();
+  check('the hotkey button waits for a key press', /Press/.test(A.$('#pw-hotkey').textContent), A.$('#pw-hotkey').textContent);
+  press(A.$('#pw-hotkey'), { code: 'KeyY', key: 'y' });
+  check('a combination without Ctrl/Alt/Meta is not accepted', /Press/.test(A.$('#pw-hotkey').textContent));
+  press(A.$('#pw-hotkey'), { ctrlKey: true, shiftKey: true, code: 'KeyY', key: 'Y' });
+  check('the new combination is recorded', settingsNow().hotkey === 'Ctrl+Shift+KeyY' && A.$('#pw-hotkey').textContent === 'Ctrl+Shift+Y', A.$('#pw-hotkey').textContent);
+  check('recording does not trigger the hotkey itself', !cardHidden());
+  press(A.w.document.body, { altKey: true, shiftKey: true, code: 'KeyT', key: 'T' });
+  check('the old hotkey no longer works', !cardHidden());
+  press(pageInput, { ctrlKey: true, shiftKey: true, code: 'KeyY', key: 'Y' });
+  check('the new one does, even from a page field (Ctrl combos type nothing)', cardHidden());
+  press(A.w.document.body, { ctrlKey: true, shiftKey: true, code: 'KeyY', key: 'Y' });
+  A.$('#pw-reset-settings').click();
+  A.$('[data-act="back"]').click();
+
+  section('A site that fights for its title');
+  const fighter = new A.w.MutationObserver(() => { if (A.w.document.title !== 'Mine!') A.w.document.title = 'Mine!'; });
+  fighter.observe(A.w.document.head, { childList: true, characterData: true, subtree: true });
+  A.w.document.title = 'Mine!';
+  await sleep(150); // a ping-pong would spin forever here (and trip the watchdog)
+  check('the script backs off and leaves the title to the site', A.w.document.title === 'Mine!', A.w.document.title);
+  fighter.disconnect();
+  B.w.dispatchEvent(new B.w.Event('focus'));
+  A.w.dispatchEvent(new A.w.Event('focus'));
+  await sleep(50);
+  check('the countdown returns the next time the tab takes over', A.w.document.title.includes('25:00') && A.w.document.title.endsWith('Mine!'), A.w.document.title);
+
+  section('Per-site exclusion');
+  const siteSwitch = A.menu.find(m => m.label.includes('on this site'));
+  A.$('[data-act="settings"]').click();
+  check('the settings offer to hide on this site', A.$('#pw-exclude').textContent === 'Hide on example.com', A.$('#pw-exclude').textContent);
+  A.$('#pw-exclude').click();
+  check('excluding hides the widget and the drawer tab', A.$('#pw-card').classList.contains('hidden') && A.$('#pw-tab').classList.contains('hidden'));
+  check('the site is saved', settingsNow().excluded.join() === 'example.com', JSON.stringify(settingsNow().excluded));
+  check('the tab title is handed back', A.w.document.title === 'Mine!', A.w.document.title);
+  A.w.dispatchEvent(new A.w.Event('focus'));
+  setVisibility(A.w, 'visible');
+  press(A.w.document.body, { altKey: true, shiftKey: true, code: 'KeyT', key: 'T' });
+  A.menu.find(m => m.label.includes('Start')).fn();
+  await sleep(30);
+  check('focus, hotkey and menu stay inert on an excluded site', A.$('#pw-tab').classList.contains('hidden') && leaderOf().id === '', JSON.stringify(leaderOf()));
+  siteSwitch.fn();
+  check('the menu switch brings the widget back', !A.$('#pw-tab').classList.contains('hidden') && settingsNow().excluded.length === 0);
+  A.$('[data-act="back"]').click();
+
+  section('A phase that ended while no tab was open');
+  store.set('pomodoro.state', JSON.stringify({ phase: 'focus', round: 1, running: true, duration: 1500000, remaining: 1500000, endsAt: fakeNow - 60000, lastTick: fakeNow - 660000, task: 'Away' }));
+  before = todayStats();
+  const F = await boot();
+  check('it completes on return and the break starts now', F.$('#pw-phase').textContent === 'Short Break' && F.$('#pw-time').textContent === '05:00', F.$('#pw-phase').textContent + ' ' + F.$('#pw-time').textContent);
+  check('silently — no chime or notification for something unwitnessed', F.notifications.length === 0);
+  check('with a note in the widget', /while you were away/.test(F.$('#pw-notice').textContent), F.$('#pw-notice').textContent);
+  check('crediting only the time up to the phase end', todayStats().focus - before.focus === 600 && todayStats().tasks.Away === 600, todayStats().focus - before.focus);
+  F.$('[data-act="reset"]').click();
+
   section('Corrupt / hostile storage is sanitised');
   const dk = Object.keys(JSON.parse(store.get('pomodoro.stats'))).sort().pop();
-  store.set('pomodoro.settings', JSON.stringify({ focusMin: 'abc', shortMin: -3, rounds: 999, sound: 'yes' }));
+  store.set('pomodoro.settings', JSON.stringify({ focusMin: 'abc', shortMin: -3, rounds: 999, sound: 'yes', theme: 5, hotkey: 'k', chime: '<x>', excluded: 'nope', volume: 1e9 }));
   store.set('pomodoro.ui', JSON.stringify({ mode: 'weird', hidden: 'no', pos: { left: 'x', top: 5 } }));
   store.set('pomodoro.state', JSON.stringify({ phase: 'focus', round: 50, running: false, duration: 'NaN', remaining: null }));
   store.set('pomodoro.stats', JSON.stringify({
-    [dk]: { focus: '<img src=x onerror=alert(1)>', rounds: 2, tasks: { '<b>t</b>': '<img src=x>', ok: 60 } },
+    [dk]: { focus: '<img src=x onerror=alert(1)>', rounds: 2, tasks: { '<b>t</b>': 30, '<img src=x>': '<img src=x>', ok: 60 } },
     'not-a-date': { focus: 1 },
   }));
   const E = await boot();
@@ -360,7 +534,8 @@ const main = async () => {
   check('an invalid duration falls back to the default', E.$('#pw-time').textContent === '25:00', E.$('#pw-time').textContent);
   check('an out-of-range round count is clamped', E.$('#pw-rounds').textContent === 'Round 12/12', E.$('#pw-rounds').textContent);
   E.$('[data-act="stats"]').click();
-  check('stored strings never become markup', !E.shadow.querySelector('img, b'));
+  check('stored strings never become markup', !E.shadow.querySelector('img, #pw-tasks span b') && E.$('#pw-tasks').textContent.includes('<b>t</b>'), E.$('#pw-tasks').innerHTML);
+  check('invalid choices fall back to defaults', E.$('#pw-wrap').getAttribute('data-theme') === 'auto' && E.$('#pw-hotkey').textContent === 'Alt+Shift+T', E.$('#pw-hotkey').textContent);
   check('no NaN / undefined anywhere in the widget', !/NaN|undefined/.test(E.shadow.textContent), E.shadow.textContent.match(/.{0,20}(NaN|undefined).{0,20}/));
   check('valid task entries survive', E.$('#pw-tasks').textContent.includes('ok'), E.$('#pw-tasks').textContent);
   E.$('#pw-reset-settings').click();
@@ -375,6 +550,9 @@ const main = async () => {
   check('no unload/beforeunload listeners (they break the back/forward cache)', !/addEventListener\(\s*'(?:before)?unload'/.test(SCRIPT));
   check('the stylesheet uses px, immune to the page root font-size', !/\d(?:\.\d+)?rem\b/.test(SCRIPT), (SCRIPT.match(/[\d.]+rem\b/g) || []).slice(0, 5).join(' '));
   check('the host resets inherited page styles', SCRIPT.includes("'all', 'initial'"));
+  check('no Tailwind left in the build', !SCRIPT.includes('--tw-') && !/tailwind/i.test(SCRIPT));
+  check('styles are adopted (immune to a strict style-src CSP)', SCRIPT.includes('adoptedStyleSheets'));
+  check('no native confirm() dialogs', !/\bconfirm\(/.test(SCRIPT));
   check('UI is built lazily, not at startup', SCRIPT.includes('function buildUI()'));
   check('a hide action exists in the widget', SCRIPT.includes('data-act="hide"'));
   check('metadata declares an icon', SCRIPT.includes('// @icon'));

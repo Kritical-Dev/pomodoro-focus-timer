@@ -5,11 +5,14 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    # The suite's own watchdog catches a frozen main thread; this bounds the
-    # whole job in case something hangs before the watchdog is reached.
+    # The suites' own watchdogs catch a frozen main thread; this bounds the
+    # whole job in case something hangs before a watchdog is reached.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
@@ -23,10 +26,20 @@ jobs:
 
       - run: npm ci
 
+      # build.mjs has no dependencies and is deterministic, so a diff here
+      # means the committed userscript was not rebuilt after a source change.
+      # The version comes from package.json, so that cannot drift either.
       - name: Rebuild and verify the committed userscript is up to date
         run: |
           npm run build
           git diff --exit-code -- pomodoro.user.js
 
-      - name: Smoke tests
+      - name: Lint (sources, tests and the built userscript)
+        run: npm run lint
+
+      - name: Unit + jsdom smoke tests
         run: npm test
+
+      # Uses the Chrome preinstalled on the runner — no browser download.
+      - name: Real-browser tests
+        run: npm run test:e2e

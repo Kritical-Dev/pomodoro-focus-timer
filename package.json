@@ -1,7 +1,7 @@
 {
   "name": "pomodoro",
-  "version": "1.4.0",
-  "description": "A modern, fully self-contained Pomodoro userscript that floats on every website and tracks how long you spend on tasks each day. UI is built with Tailwind CSS, compiled and inlined into the script, and rendered inside a Shadow DOM so page styles never leak in or out.",
+  "version": "2.0.0",
+  "description": "A modern, fully self-contained Pomodoro userscript that floats on every website and tracks how long you spend on tasks each day. No dependencies at runtime or build time; the UI lives in a Shadow DOM so page styles never leak in or out.",
   "main": "pomodoro.user.js",
   "repository": {
     "type": "git",
@@ -16,7 +16,10 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "test": "node test/run.mjs"
+    "lint": "eslint .",
+    "test": "node --test test/core.test.mjs && node test/run.mjs",
+    "test:e2e": "node --test --test-concurrency=1 test/e2e.test.mjs",
+    "test:all": "npm run lint && npm test && npm run test:e2e"
   },
   "keywords": [
     "pomodoro",
@@ -27,6 +30,10 @@
   "license": "MIT",
   "type": "commonjs",
   "devDependencies": {
-    "jsdom": "^30.1.1"
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
+    "jsdom": "^30.1.1",
+    "playwright-core": "^1.65.0"
   }
 }
